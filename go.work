@@ -1,0 +1,14 @@
+go 1.22.2
+
+use (
+	.
+	./libs/config
+	./libs/events
+	./libs/fsm
+	./libs/proto
+	./libs/rand
+	./libs/store
+	./libs/telemetry
+	./services/api
+	./services/game
+)

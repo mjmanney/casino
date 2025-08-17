@@ -1,0 +1,31 @@
+# Binaries
+/bin/
+/api
+/game
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Logs
+*.log
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.swp
+
+# OS-specific cruft
+.DS_Store
+Thumbs.db
+
+# Go workspace caches
+go.work.sum
+
+# Dependency dirs (if vendored)
+vendor/

@@ -1,0 +1,30 @@
+# Exclude local build artifacts
+bin/
+api
+game
+
+# Logs
+*.log
+
+# Go test binaries
+*.test
+*.out
+
+# Vendor (if not using vendored deps)
+vendor/
+
+# Git + VCS
+.git
+.gitignore
+
+# Editor / IDE configs
+.vscode/
+.idea/
+*.swp
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Workspace metadata
+go.work.sum
