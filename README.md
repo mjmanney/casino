@@ -56,3 +56,50 @@ services:
 
 This modular, event‑driven design enables replayable game history, scalable
 read models, and straightforward addition of new games beyond blackjack.
+
+## Environment Setup
+
+### Installing Homebrew
+
+`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+
+### Installing Go
+The repository targets Go 1.22 and uses Go workspaces
+
+```
+brew install go
+echo 'export PATH="/usr/local/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+go version
+```
+
+Synchronize workspace modules
+
+`go work sync`
+
+### Install Dev Tools
+
+```
+brew install golangci-lint flyway
+golangci-lint --version
+flyway -v
+```
+
+### Install Docker
+
+```
+brew install --cask docker
+open -a Docker
+docker --version
+```
+
+Start local infrastructure (Postgres, Redis, Kafka, Zookeeper, Consul)
+Services are defined in `docker-compose.yml`
+
+```
+docker compose up -d
+docker compose ps
+```
+
+
+
