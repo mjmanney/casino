@@ -9,8 +9,6 @@ func main() {
 	st := store.NewEventStore()
 
 	p1 := NewPlayer("1", "PlayerOne")
-	p2 := NewPlayer("2", "PlayerTwo")
-	p3 := NewPlayer("3", "PlayerThree")
 
 	dealer := Dealer{
 		Hand: Hand{},
@@ -18,29 +16,29 @@ func main() {
 	}
 
 	g := NewGame(st)
-	g.Dealer = &dealer
-	fmt.Println("INFO: New game", g.State)
 	g.Seat1 = p1
-	g.Seat2 = p2
-	g.Seat3 = p3
-	fmt.Println("INFO: Players joined", g.State)
-	g.Shuffle()
+	g.Dealer = &dealer
 
-	fmt.Println("INFO: Bets open", g.State)
-	g.Seat1.Bet = 100
+	g.Shuffle()
+	p1.TotalBet = 100
 	g.StartRound()
 	g.DealCards()
 
-	PrintHand(g.Dealer.Hand)
-	PrintHand(g.Seat1.Hand)
+	hit_action := Hit{}
+	err := hit_action.Execute(g, g.Seat1)
+	if err != nil {
+		// handle error
+	}
 
-	g.Hit()
-	PrintHand(g.Seat1.Hand)
-	g.Stand()
+	stand_action := Stand{}
+	err = stand_action.Execute(g, g.Seat1)
+	if err != nil {
+		// handle error
+	}
+
 	g.DealerPlay()
-	PrintHand(g.Dealer.Hand)
 	g.Settle()
 
-	fmt.Println("INFO: round complete", g.State)
-	fmt.Println("INFO: event log:", st.All())
+	fmt.Println("INFO: Round Complete")
+	// fmt.Println("INFO: event log:", st.All())
 }

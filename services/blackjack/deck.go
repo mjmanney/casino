@@ -10,8 +10,9 @@ import (
 
 // Card represents a playing card.
 type Card struct {
-	Suit string
-	Rank string
+	Suit   string
+	Rank   string
+	Hidden bool
 }
 
 // Deck holds a collection of cards.
@@ -88,7 +89,7 @@ func PrintCard(card Card) {
 }
 
 func PrintHand(hand Hand) {
-	c := hand.cards
+	c := hand.Cards
 	for _, card := range c {
 		PrintCard(card)
 	}
