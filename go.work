@@ -10,5 +10,5 @@ use (
 	./libs/store
 	./libs/telemetry
 	./services/api
-	./services/game
+	./services/blackjack
 )

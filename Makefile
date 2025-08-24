@@ -15,14 +15,14 @@ all: docker-dev go-build-services ## Start infra & build
 go-build-services: ## Build api+game -> bin/
 	mkdir -p $(BIN_DIR)
 	go build -o $(BIN_DIR)/api  ./services/api
-	go build -o $(BIN_DIR)/game ./services/game
+	go build -o $(BIN_DIR)/blackjack ./services/blackjack
 
 go-run-services: # Run api+game via go run
 	@echo "Starting API service..."
 	go run ./services/api &
 	API_PID=$$!
-	@echo "Starting Game service..."
-	go run ./services/game &
+	@echo "Starting Blackjack service..."
+	go run ./services/blackjack &
 	GAME_PID=$$!
 	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM
 	wait $$API_PID $$GAME_PID
@@ -30,7 +30,7 @@ go-run-services: # Run api+game via go run
 go-run-all: go-build-services # Run compiled api+game from bin/
 	./bin/api &
 	API_PID=$$!
-	./bin/game &
+	./bin/blackjack &
 	GAME_PID=$$!
 	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM
 	wait $$API_PID $$GAME_PID
