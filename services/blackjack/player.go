@@ -5,13 +5,12 @@ import (
 	"strconv"
 )
 
-/*
------ Player Structures -----
-Players have a unique ID, name, and hold a collection of Hands.
-Players store data about their turn in the game and make requests to the game state.
-*/
+const MaxHandsPerPlayer = 4
+
+//	----- Player Structures -----
+
 type Player struct {
-	ID         string // unique identifier or seat label
+	ID         string
 	Name       string
 	Hands      []*Hand
 	TotalBet   int
@@ -26,33 +25,21 @@ const (
 	Idle
 )
 
-func (p *Player) Active() { p.Status = Active }
-func (p *Player) Idle()   { p.Status = Idle }
-func (p *Player) Reset()  { p.Hands = nil; p.Status = Active }
-
-// Player Constructor
 func NewPlayer(id string, name string) *Player {
 	return &Player{
 		ID:       id,
 		Name:     name,
-		Hands:    []*Hand{{}},
+		Hands:    make([]*Hand, 0, MaxHandsPerPlayer),
 		TotalBet: 0,
 		Status:   Active,
 	}
 }
 
-// Returns hands that do not have a BUST or SURRENDER status
-func (p *Player) ActiveHands() []*Hand {
-	out := make([]*Hand, 0, len(p.Hands))
-	for _, h := range p.Hands {
-		if h.Status == Qualified || h.Status == Blackjack {
-			out = append(out, h)
-		}
-	}
-	return out
-}
+func (p *Player) Active() { p.Status = Active }
+func (p *Player) Idle()   { p.Status = Idle }
+func (p *Player) Reset()  { p.Hands = nil; p.Status = Active }
 
-// Adds a Hand to Player.Hands, used for SPLIT
+// Add hand to the players collection.
 func (p *Player) AddHand(h *Hand) {
 	if len(p.Hands) >= MaxHandsPerPlayer {
 		fmt.Println("Cannot add more hands: maximum hands per player reached.")
@@ -61,7 +48,7 @@ func (p *Player) AddHand(h *Hand) {
 	p.Hands = append(p.Hands, h)
 }
 
-// Check that the Players Hand meets requirements for SPLIT
+// Check that the Player is elligble for SPLIT
 func (p *Player) CanSplit() bool {
 	// Check for the maximum hands
 	if len(p.Hands) < MaxHandsPerPlayer {
@@ -88,16 +75,9 @@ func (p *Player) CanSplit() bool {
 	return false
 }
 
-/*
-	----- Hand Structures -----
-	Hand represents a collection of cards held by a player or dealer.
-	It also keeps track of key hands via status, i.e. as Blackjack or Bust.
-*/
+//	----- Hand Structures -----
 
-const MaxHandsPerPlayer = 4
-
-// Hand keeps a collection of cards, and tracks the active hand through an Index.
-// Game actions are captured for DOUBLE and SPLIT, as well as the Hand Status.
+// Represents a collection of cards held by a Player or Dealer.
 type Hand struct {
 	Index      HandIndex
 	Cards      []Card
@@ -107,16 +87,21 @@ type Hand struct {
 	SplitFrom  HandIndex
 }
 
-// Hand constructor
-func NewHand(index int, bet int) *Hand {
+func NewHand(bet int, opts SplitConfig) *Hand {
 	return &Hand{
-		Index:      HandIndex(index),
-		Cards:      []Card{},
+		Index:      opts.Index,
+		Cards:      opts.Cards,
 		Status:     Qualified,
 		Bet:        bet,
 		DoubleDown: false,
-		SplitFrom:  -1,
+		SplitFrom:  opts.SplitFrom,
 	}
+}
+
+type SplitConfig struct {
+	Index     HandIndex
+	Cards     []Card
+	SplitFrom HandIndex
 }
 
 type HandIndex int
@@ -125,19 +110,19 @@ type HandStatus int
 
 const (
 	Qualified HandStatus = iota
-	Bust
+	Busted
 	Blackjack
-	Surrender
+	Surrendered
 	Settled
 )
 
 func (h *Hand) Qualified() { h.Status = Qualified }
-func (h *Hand) Bust()      { h.Status = Bust }
+func (h *Hand) Bust()      { h.Status = Busted }
 func (h *Hand) Blackjack() { h.Status = Blackjack }
-func (h *Hand) Surrender() { h.Status = Surrender }
+func (h *Hand) Surrender() { h.Status = Surrendered }
 func (h *Hand) Settled()   { h.Status = Settled }
 
-// Calculate the hand value, according to Blackjack rules
+// Returns the total value of a hand.
 func (h Hand) Value() int {
 	total := 0
 	aces := 0

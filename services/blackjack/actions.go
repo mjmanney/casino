@@ -10,14 +10,31 @@ type Action interface {
 	Execute(g *Game, p *Player) error
 }
 
+func (g *Game) ApplyAction(playerID string, a Action) error {
+	var p *Player
+	switch playerID {
+	case g.Seat1.ID:
+		p = g.Seat1
+	case g.Seat2.ID:
+		p = g.Seat2
+	case g.Seat3.ID:
+		p = g.Seat3
+	}
+	if p == nil {
+		return fmt.Errorf("unknown player %s", playerID)
+	}
+	return a.Execute(g, p)
+}
+
+//	----- Hit -----
+
 /*
-HIT: the player draws one card.
+The player draws one card.
 After the card is drawn the player may STAND or
 continue to HIT if the total hand value is <= 21.
 */
 type Hit struct{}
 
-// Execute applies the Hit action to the supplied player.
 func (Hit) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
 		return fmt.Errorf("cannot hit while in %s", g.State)
@@ -35,33 +52,30 @@ func (Hit) Execute(g *Game, p *Player) error {
 		},
 	}
 	g.Store.Append(e)
-
-	switch {
-	case hand.Value() > 21:
+	if hand.Value() > 21 {
 		hand.Bust()
-		g.State = StateDealerTurn
-	case hand.Value() == 21:
-		hand.Qualified()
-		g.State = StateDealerTurn
-	default:
-		hand.Qualified()
-		g.State = StatePlayerTurn
+		g.AdvanceTurn()
+	} else if hand.Value() == 21 {
+		g.AdvanceTurn()
 	}
 	return nil
 }
 
-/*
-STAND: Players may STAND to end their turn with a qualifying hand.
-*/
+//	----- Stand -----
+
+// Player may STAND to end the turn with a qualifying hand.
 type Stand struct{}
 
-// Execute applies the Hit action to the supplied player.
 func (Stand) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
 		return fmt.Errorf("cannot hit while in %s", g.State)
 	}
 
 	hand := p.Hands[p.ActiveHand]
+
+	if hand.Status == Busted {
+		return fmt.Errorf("Stand not applicable; player BUSTED")
+	}
 
 	e := store.Event{
 		Type: "Stand",
@@ -71,18 +85,19 @@ func (Stand) Execute(g *Game, p *Player) error {
 		},
 	}
 	g.Store.Append(e)
-	g.State = StateDealerTurn
+	g.AdvanceTurn()
 	return nil
 }
 
+//	----- Double -----
+
 /*
-DOUBLE: the player draws one card.  After the card is drawn, their turn is over.
-Players may only DOUBLE as the first action of a hand.
-Players must match their original bet to double.  If they do not have funds, the action is unavailable.
+The player places an additional bet equal to their original stake.
+One card is drawn and ends the turn.  Available only on the first action
+of a turn.
 */
 type Double struct{}
 
-// Execute applies the Double action to the supplied player.
 func (Double) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
 		return fmt.Errorf("cannot hit while in %s", g.State)
@@ -99,19 +114,18 @@ func (Double) Execute(g *Game, p *Player) error {
 			"Card":     card,
 		},
 	}
-	// Double ends the player turn
-	g.State = StateDealerTurn
 	g.Store.Append(e)
+	g.AdvanceTurn()
 	return nil
 }
 
+//	----- Split -----
+
 /*
-SPLIT: the player may SPLIT a hand containing two cards of matching values.
-Upon a SPLIT, a single card is dealt to each new hand, and the player progresses through each hand.
-Players may SPLIT only as the first action of a hand.
-Players may SPLIT up to three times, for a total of four hands.
-Players may DOUBLE after splitting.
-Players must match their original bet to split.  If they do not have funds, the action is unavailable.
+The player places an additional bet equal to their original stake.
+Split two cards of matching values, with a single card dealt to each new hand.
+Available only on the first action of a turn.  Players can split up to three times.
+Doubles allowed after splitting.
 */
 type Split struct{}
 
@@ -134,42 +148,41 @@ func (Split) Execute(g *Game, p *Player) error {
 	hand.Cards = append(hand.Cards, spDrawCard1)
 	// Draw another card from the shoe
 	spDrawCard2 := g.Dealer.Shoe.Draw()
-	// Create the second hand and add it to the players hands
-
-	newSplitHand := Hand{
-		Index:      HandIndex(len(p.Hands)),
-		Cards:      []Card{splitCard, spDrawCard2},
-		Status:     Qualified,
-		Bet:        hand.Bet,
-		DoubleDown: false,
-		SplitFrom:  p.ActiveHand,
+	// Create the new split hand
+	splitConfig := SplitConfig{
+		Index:     HandIndex(len(p.Hands)),
+		Cards:     []Card{splitCard, spDrawCard2},
+		SplitFrom: p.ActiveHand,
 	}
-	p.AddHand(&newSplitHand)
-
+	newSplitHand := NewHand(hand.Bet, splitConfig)
+	p.AddHand(newSplitHand)
+	g.InjectNext(Turn{
+		Player: p,
+		Hand:   newSplitHand,
+	})
 	e := store.Event{
 		Type: "Split",
 		Payload: map[string]any{
 			"PlayerID": p.ID,
 		},
 	}
-
 	g.Store.Append(e)
 	return nil
 }
 
+//	----- Insurance -----
+
 /*
-INSURANCE: players make may an INSURANCE bet worth half of the original bet.
-Players are offered INSURANCE by the dealer only when the dealer up card is an Ace.
-If the dealer has Blackjack, the player insurance bet pays 2:1 and their original bet is lost.
-Otherwise, the INSURANCE bet is lost and play resumes as normal.
-Players may only take INSURANCE after all cards are dealt and before the first player action.
-Players must match half the original bet for INSURANCE.  If they do not have funds, the action is unavailable.
+The player places an additional bet equal to half their original stake.
+Available only when the dealer up card is an Ace.
+On dealer Blackjack, insurance pays 2:1 and the original stake is lost.
+Otherwise, the insurance bet is lost and play resumes as normal.
+Offered after all cards are dealt and before the first player action.
 */
 type Insurance struct{}
 
-// Execute applies the Split action to the supplied player.
 func (Insurance) Execute(g *Game, p *Player) error {
-	if g.State != StatePlayerTurn {
+	if g.State != StateInsuranceTurn {
 		return fmt.Errorf("cannot hit while in %s", g.State)
 	}
 
@@ -190,15 +203,14 @@ func (Insurance) Execute(g *Game, p *Player) error {
 	return nil
 }
 
+//	----- Surrender -----
+
 /*
-  SURRENDER: the player may SURRENDER a forfiet the hand to retain half of their original bet.
-  After a SURRENDER the player turn ends.
-  Players may SURRENDER only as the first action of a hand.
-
-
+The player may surrender their hand, to recover half their original bet, and end their turn.
+Available only on the first action of a turn.
+*/
 type Surrender struct{}
 
-// Execute applies the Surrender action to the supplied player.
 func (Surrender) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
 		return fmt.Errorf("cannot hit while in %s", g.State)
@@ -212,7 +224,6 @@ func (Surrender) Execute(g *Game, p *Player) error {
 	}
 
 	g.Store.Append(e)
-    g.State = StateDealerTurn
+	g.AdvanceTurn()
 	return nil
 }
-*/

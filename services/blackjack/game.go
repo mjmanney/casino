@@ -3,16 +3,23 @@ package main
 import (
 	"casino/libs/fsm"
 	"casino/libs/store"
-	"fmt"
 )
 
-// Dealer represents the house.
-type Dealer struct {
-	Shoe *Shoe
-	Hand Hand
-}
+//	----- Game State Machine -----
 
-// ----- Game State Machine -----
+/*
+Keep the game as the single point of truth.
+The game knows the shoe, current state, and active players.
+Players should not manipulate the deck or state directly; they should “request” actions that the game validates and executes.
+This prevents illegal moves and keeps the event log consistent.
+*/
+type Game struct {
+	State               fsm.State
+	Seat1, Seat2, Seat3 *Player
+	Dealer              *Dealer
+	TurnQueue           []Turn
+	Store               *store.EventStore
+}
 
 const (
 	StateTableOpen     fsm.State = "TableOpen"
@@ -27,86 +34,72 @@ const (
 	StateDealerTurn    fsm.State = "DealerTurn"
 )
 
-/*
-Keep the game as the single point of truth.
-The game knows the shoe, current state, and active player.
-Players should not manipulate the deck or state directly; they should “request” actions that the game validates and executes.
-This prevents illegal moves and keeps the event log consistent.
-*/
-type Game struct {
-	State  fsm.State
-	Seat1  *Player
-	Seat2  *Player
-	Seat3  *Player
-	Dealer *Dealer
-	Store  *store.EventStore
-}
-
-// NewGame constructs a Game.
+// Construct a new Game
 func NewGame(store *store.EventStore) *Game {
+	d := NewDealer("Dealer")
 	return &Game{
-		State:  StateTableOpen,
-		Seat1:  nil,
-		Seat2:  nil,
-		Seat3:  nil,
-		Dealer: nil,
-		Store:  store,
+		State:     StateTableOpen,
+		Seat1:     nil,
+		Seat2:     nil,
+		Seat3:     nil,
+		Dealer:    d,
+		TurnQueue: []Turn{},
+		Store:     store,
 	}
 }
 
 // Returns the seats in dealing order, including nils (so we can skip them).
-func (g *Game) seats() []*Player {
+func (g *Game) GetSeats() []*Player {
 	return []*Player{g.Seat1, g.Seat2, g.Seat3}
 }
 
 func (g *Game) DoForEachPlayer(fn func(*Player)) {
-	for _, p := range g.seats() {
+	for _, p := range g.GetSeats() {
 		if p != nil {
 			fn(p)
 		}
 	}
 }
 
-func (g *Game) ApplyAction(playerID string, a Action) error {
-	var p *Player
-	switch playerID {
-	case g.Seat1.ID:
-		p = g.Seat1
-	case g.Seat2.ID:
-		p = g.Seat2
-	case g.Seat3.ID:
-		p = g.Seat3
-	}
-	if p == nil {
-		return fmt.Errorf("unknown player %s", playerID)
-	}
-	return a.Execute(g, p)
-}
-
-// Shuffles cards
-// This is done when a table state is first opened
-// or when the cut card has been dealt
+// First build only (table just opened)
 func (g *Game) Shuffle() {
 	if g.State != StateTableOpen {
 		return
 	}
 	g.State = StateShuffleCards
 
-	e := store.Event{
-		Type: "Shulffing Cards",
-		Payload: map[string]any{
-			"state": g.State,
-		},
+	g.Store.Append(store.Event{
+		Type:    "Shuffling Cards",
+		Payload: map[string]any{"state": g.State},
+	})
+
+	d1 := NewDeck()
+	d2 := NewDeck()
+	d3 := NewDeck()
+	d4 := NewDeck()
+	d5 := NewDeck()
+	d6 := NewDeck()
+
+	g.Dealer.Shoe = NewShoe(0.65, d1, d2, d3, d4, d5, d6)
+
+	g.State = StateBetsOpen
+}
+
+// Call this when the cut card is reached (e.g., between rounds)
+func (g *Game) ReshuffleShoe() {
+	if g.Dealer.Shoe == nil {
+		g.Shuffle()
+		return
 	}
-	g.Store.Append(e)
-	// Create two new decks
-	deck1 := mintDeck()
-	deck2 := mintDeck()
-	shoe := shuffleDecks(deck1, deck2)
-	g.Dealer.Shoe = shoe
-	// TODO
-	// Logic for deck size and penetration
-	// Print deck
+
+	g.State = StateShuffleCards
+	g.Store.Append(store.Event{
+		Type:    "Reshuffling Shoe",
+		Payload: map[string]any{"state": g.State},
+	})
+
+	// Reshuffle existing shoe contents
+	g.Dealer.Shoe.Shuffle(0.65)
 	g.State = StateBetsOpen
 }
 
@@ -115,7 +108,7 @@ func (g *Game) StartRound() {
 	if g.State != StateBetsOpen {
 		return
 	}
-	betAmount := g.Seat1.TotalBet
+	betAmount := g.Seat1.TotalBet // TODO: Update
 	e := store.Event{
 		Type: "StartRound",
 		Payload: map[string]any{
@@ -147,7 +140,7 @@ func (g *Game) DealCards() {
 	g.Store.Append(e)
 
 	g.DoForEachPlayer(func(p *Player) {
-		hand := NewHand(0, p.TotalBet)
+		hand := NewHand(p.TotalBet, SplitConfig{})
 		p.AddHand(hand)
 	})
 
@@ -165,6 +158,7 @@ func (g *Game) DealCards() {
 		}
 	}
 
+	g.EnqueueRoundStart()
 	// TODO: Dealer peek() if showing 10 or picture card
 	// If blackjack
 	//   g.Player.Hand.Blackjack()
@@ -204,12 +198,12 @@ func (g *Game) DealerPlay() {
 }
 
 func (g *Game) AllPlayersBusted() bool {
-	for _, p := range g.seats() {
+	for _, p := range g.GetSeats() {
 		if p == nil {
 			continue
 		}
 		for _, h := range p.Hands {
-			if h.Status != Bust {
+			if h.Status != Busted {
 				return false
 			}
 		}
@@ -222,13 +216,13 @@ func (g *Game) Settle() {
 	if g.State != StateBetsSettle {
 		return
 	}
-	player := g.Seat1.Hands[0].Value()
+	player := g.Seat1.Hands[0].Value() // TODO: Update
 	dealer := g.Dealer.Hand.Value()
-	result := "push"
+	result := "PUSH"
 	if player > 21 || (dealer <= 21 && dealer > player) {
-		result = "dealer wins"
+		result = "DEALER WINS"
 	} else if dealer > 21 || player > dealer {
-		result = "player wins"
+		result = "PLAYER WINS"
 	}
 	e := store.Event{
 		Type: "Settled",

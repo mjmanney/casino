@@ -8,7 +8,9 @@ BIN_DIR := bin
 help: # Show targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' Makefile | sed 's/:.*##/: /'
 
-all: docker-dev go-build-services ## Start infra & build
+all: ## Start infra & build
+	docker-dev 
+	go-build-services
 
 # --- Go / Services ---
 
@@ -17,7 +19,7 @@ go-build-services: ## Build api+game -> bin/
 	go build -o $(BIN_DIR)/api  ./services/api
 	go build -o $(BIN_DIR)/blackjack ./services/blackjack
 
-go-run-services: # Run api+game via go run
+go-run-services: ## Run api+game via go run
 	@echo "Starting API service..."
 	go run ./services/api &
 	API_PID=$$!
@@ -27,7 +29,8 @@ go-run-services: # Run api+game via go run
 	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM
 	wait $$API_PID $$GAME_PID
 
-go-run-all: go-build-services # Run compiled api+game from bin/
+go-run-all: ## Run compiled api+game from bin/
+	go-build-services
 	./bin/api &
 	API_PID=$$!
 	./bin/blackjack &
@@ -35,31 +38,31 @@ go-run-all: go-build-services # Run compiled api+game from bin/
 	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM
 	wait $$API_PID $$GAME_PID
 
-go-test: # Run tests
+go-test: ## Run tests
 	go test ./services/... ./libs/... -v
 
-go-lint: # Lint (golangci-lint)
+go-lint: ## Lint (golangci-lint)
 	golangci-lint run ./...
 
-go-clean: # Clean artifacts
+go-clean: ## Clean artifacts
 	rm -rf $(BIN_DIR)
 	go clean ./...
 
 # --- Docker / Infra ---
 
-docker-dev:
+docker-dev:  ## Docker compose up
 	docker compose up -d
 
-docker-down:
+docker-down: ## Docker compose down
 	docker compose down -v
 
-docker-ps: # List containers
+docker-ps: ## List containers
 	@docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}"
 
-docker-logs:
+docker-logs: ## Docker logs
 	docker compose logs -f
 
-flyway-migrate:
+flyway-migrate: ## Flyway Migrate
 	flyway migrate
-flyway-clean:
+flyway-clean: ## Flyway Clean
 	flyway clean
