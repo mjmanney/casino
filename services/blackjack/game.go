@@ -3,6 +3,7 @@ package main
 import (
 	"casino/libs/fsm"
 	"casino/libs/store"
+	"fmt"
 )
 
 //	----- Game State Machine -----
@@ -159,14 +160,47 @@ func (g *Game) DealCards() {
 	}
 
 	g.EnqueueRoundStart()
-	// TODO: Dealer peek() if showing 10 or picture card
-	// If blackjack
-	//   g.Player.Hand.Blackjack()
-	//   g.State = StateBetsSettle
-	//
-	// TODO: Dealer offers insurance if showing an Ace
-	// g.State = InsuranceTurn
-	g.State = StatePlayerTurn
+	g.dealerPeek()
+}
+
+// Dealer checks the hidden card for Blackjack
+func (g *Game) checkBlackjack() {
+	if g.State != StateDealCards && g.State != StateInsuranceTurn {
+		return
+	}
+
+	fmt.Println("Dealer peeking...")
+	if g.Dealer.Hand.Value() == 21 {
+		fmt.Println("Dealer has blackjack")
+		g.State = StateBetsSettle
+	} else {
+		fmt.Println("Dealer does not have blackjack. Resume play.")
+		g.State = StatePlayerTurn
+	}
+}
+
+func (g *Game) dealerPeek() {
+	if g.State != StateDealCards {
+		return
+	}
+	for _, card := range g.Dealer.Hand.Cards {
+		if !card.Hidden {
+			switch card.Rank {
+			case "A":
+				g.State = StateInsuranceTurn
+				g.offerInsurance()
+			case "10", "J", "Q", "K":
+				g.checkBlackjack()
+			default:
+				g.State = StatePlayerTurn
+			}
+		}
+	}
+}
+
+func (g *Game) offerInsurance() {
+	fmt.Println("Insurance open.")
+	fmt.Println("Insurance closed.")
 }
 
 // DealerPlay draws cards for the dealer per blackjack rules.
@@ -182,16 +216,18 @@ func (g *Game) DealerPlay() {
 		},
 	}
 	g.Store.Append(e)
+
+	g.Dealer.Hand.Cards[1].Hidden = false
+	fmt.Println("flipping hidden card....")
+	PrintHand(*g.Dealer.Hand)
 	// If all players have busted, dealer only shows hidden card
 	// they do not continue to draw
-	g.Dealer.Hand.Cards[1].Hidden = false
-	if g.AllPlayersBusted() {
-		// Skip drawing more cards
-	} else {
+	if !g.AllPlayersBusted() {
 		for g.Dealer.Hand.Value() < 17 {
 			card := g.Dealer.Shoe.Draw()
 			g.Dealer.Hand.Cards = append(g.Dealer.Hand.Cards, card)
 			g.Store.Append(store.Event{Type: "DealerHit", Payload: card})
+			PrintHand(*g.Dealer.Hand)
 		}
 	}
 	g.State = StateBetsSettle

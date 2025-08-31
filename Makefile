@@ -9,8 +9,8 @@ help: # Show targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' Makefile | sed 's/:.*##/: /'
 
 all: ## Start infra & build
-	docker-dev 
-	go-build-services
+	@$(MAKE) docker-dev ; \
+	$(MAKE) go-build-services
 
 # --- Go / Services ---
 
@@ -20,22 +20,24 @@ go-build-services: ## Build api+game -> bin/
 	go build -o $(BIN_DIR)/blackjack ./services/blackjack
 
 go-run-services: ## Run api+game via go run
-	@echo "Starting API service..."
-	go run ./services/api &
-	API_PID=$$!
-	@echo "Starting Blackjack service..."
-	go run ./services/blackjack &
-	GAME_PID=$$!
-	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM
-	wait $$API_PID $$GAME_PID
+	@echo "Starting API service..." ; \
+		go run ./services/api & \
+		API_PID=$$! ; \
+		echo "Starting Blackjack service (foreground)..." ; \
+		trap "kill $$API_PID 2>/dev/null || true" INT TERM EXIT ; \
+		go run ./services/blackjack ; \
+		STATUS=$$? ; \
+		kill $$API_PID 2>/dev/null || true ; \
+		wait $$API_PID 2>/dev/null || true ; \
+		exit $$STATUS
 
 go-run-all: ## Run compiled api+game from bin/
-	go-build-services
-	./bin/api &
-	API_PID=$$!
-	./bin/blackjack &
-	GAME_PID=$$!
-	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM
+	@$(MAKE) go-build-services ; \
+	./bin/api & \
+	API_PID=$$! ; \
+	./bin/blackjack & \
+	GAME_PID=$$! ; \
+	trap "kill $$API_PID $$GAME_PID 2>/dev/null || true" INT TERM ; \
 	wait $$API_PID $$GAME_PID
 
 go-test: ## Run tests
@@ -46,7 +48,7 @@ go-lint: ## Lint (golangci-lint)
 
 go-clean: ## Clean artifacts
 	rm -rf $(BIN_DIR)
-	go clean ./...
+	go clean -cache -testcache -modcache
 
 # --- Docker / Infra ---
 

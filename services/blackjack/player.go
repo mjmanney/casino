@@ -83,6 +83,7 @@ type Hand struct {
 	Cards      []Card
 	Status     HandStatus
 	Bet        int
+	SideBets   []SideBet
 	DoubleDown bool
 	SplitFrom  HandIndex
 }

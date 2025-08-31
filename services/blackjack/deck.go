@@ -116,13 +116,24 @@ func PrintCard(card Card) {
 		"Spades":   "♠",
 	}
 
-	fmt.Println("+---------+")
-	fmt.Printf("| %-6s  |\n", card.Rank)
-	fmt.Println("|         |")
-	fmt.Printf("|    %-2s   |\n", suitSymbols[card.Suit])
-	fmt.Println("|         |")
-	fmt.Printf("|%8s |\n", card.Rank)
-	fmt.Println("+---------+")
+	if !card.Hidden {
+		fmt.Println("+---------+")
+		fmt.Printf("| %-6s  |\n", card.Rank)
+		fmt.Println("|         |")
+		fmt.Printf("|    %-2s   |\n", suitSymbols[card.Suit])
+		fmt.Println("|         |")
+		fmt.Printf("|%8s |\n", card.Rank)
+		fmt.Println("+---------+")
+	} else {
+		fmt.Println("+---------+")
+		fmt.Printf("| %-6s  |\n", "?")
+		fmt.Println("|         |")
+		fmt.Printf("|    %-2s   |\n", "?")
+		fmt.Println("|         |")
+		fmt.Printf("|%8s |\n", "?")
+		fmt.Println("+---------+")
+
+	}
 }
 
 func PrintHand(hand Hand) {

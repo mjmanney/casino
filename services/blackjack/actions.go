@@ -68,13 +68,13 @@ type Stand struct{}
 
 func (Stand) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot hit while in %s", g.State)
+		return fmt.Errorf("cannot stand while in %s", g.State)
 	}
 
 	hand := p.Hands[p.ActiveHand]
 
 	if hand.Status == Busted {
-		return fmt.Errorf("Stand not applicable; player BUSTED")
+		return fmt.Errorf("stand not applicable; player busted")
 	}
 
 	e := store.Event{
@@ -100,7 +100,7 @@ type Double struct{}
 
 func (Double) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot hit while in %s", g.State)
+		return fmt.Errorf("cannot double while in %s", g.State)
 	}
 
 	hand := p.Hands[p.ActiveHand]
@@ -132,7 +132,7 @@ type Split struct{}
 // Execute applies the Split action to the supplied player.
 func (Split) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot hit while in %s", g.State)
+		return fmt.Errorf("cannot split while in %s", g.State)
 	}
 	if !p.CanSplit() {
 		return fmt.Errorf("cannot split due to maximum number of hands or different card values")
@@ -183,7 +183,7 @@ type Insurance struct{}
 
 func (Insurance) Execute(g *Game, p *Player) error {
 	if g.State != StateInsuranceTurn {
-		return fmt.Errorf("cannot hit while in %s", g.State)
+		return fmt.Errorf("cannot accept insurance while in %s", g.State)
 	}
 
 	/*
@@ -213,7 +213,7 @@ type Surrender struct{}
 
 func (Surrender) Execute(g *Game, p *Player) error {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot hit while in %s", g.State)
+		return fmt.Errorf("cannot surrender while in %s", g.State)
 	}
 
 	e := store.Event{
