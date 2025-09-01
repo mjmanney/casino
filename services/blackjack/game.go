@@ -5,6 +5,7 @@ import (
 	"casino/libs/fsm"
 	"casino/libs/store"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 )
@@ -23,6 +24,17 @@ type Game struct {
 	Dealer              *Dealer
 	TurnQueue           []Turn
 	Store               *store.EventStore
+	Config              *GameConfig
+}
+
+type GameConfig struct {
+	MinBuyIn        int
+	MaxBuyIn        int
+	MinWager        int
+	MaxWager        int
+	Payout          int
+	InsurancePayout float64 // 2.0 = 2:1
+	BlackjackPayout float64 // 1.5 = 3:2
 }
 
 const (
@@ -49,6 +61,15 @@ func NewGame(store *store.EventStore) *Game {
 		Dealer:    d,
 		TurnQueue: []Turn{},
 		Store:     store,
+		Config: &GameConfig{
+			MinBuyIn:        100,
+			MaxBuyIn:        100000,
+			MinWager:        5,
+			MaxWager:        10000,
+			Payout:          1,
+			InsurancePayout: 2.0,
+			BlackjackPayout: 1.5,
+		},
 	}
 }
 
@@ -120,17 +141,20 @@ func (g *Game) PlaceBets() {
 		cmd := scanner.Text()
 		betAmount, err := strconv.Atoi(cmd)
 		if err != nil {
-			p.Wager(betAmount)
-			e := store.Event{
-				Type: "PlacedWager",
-				Payload: map[string]any{
-					"Player":    p.Name,
-					"GameState": g.State,
-					"Wager":     betAmount,
-				},
-			}
-			g.Store.Append(e)
+			log.Printf("failed to convert %q to int: %v", cmd, err)
+			return
 		}
+		p.Wager(betAmount)
+		e := store.Event{
+			Type: "PlacedWager",
+			Payload: map[string]any{
+				"Player":    p.Name,
+				"GameState": g.State,
+				"Wager":     betAmount,
+			},
+		}
+		g.Store.Append(e)
+
 	})
 	g.State = StateBetsClosed
 }
@@ -201,7 +225,8 @@ func (g *Game) checkBlackjack() {
 	fmt.Println("Dealer peeking...")
 	if g.Dealer.Hand.Value() == 21 {
 		g.Dealer.RevealHoleCard()
-		fmt.Println("Dealer has blackjack")
+		g.Dealer.Hand.Status = Blackjack
+		fmt.Println("Dealer has blackjack.")
 		g.State = StateBetsSettle
 	} else {
 		fmt.Println("Dealer does not have blackjack. Resume play.")
@@ -295,20 +320,29 @@ func (g *Game) Settle() {
 
 	g.DoForEachPlayer(func(p *Player) {
 		for h := range p.Hands {
-			hand := p.Hands[h]
-			pScore := hand.Value()
-			result := "PUSH"
-			if pScore > 21 || (dScore <= 21 && dScore > pScore) {
-				result = "LOSS"
-			} else if dScore > 21 || pScore > dScore {
-				p.LocalWallet += hand.Bet
-				result = "WIN"
+			pHand := p.Hands[h]
+			wager := pHand.Bet
+			var payout int
+			outcome := EvaluateOutcome(pHand.Value(), pHand.Status, dScore, g.Dealer.Hand.Status)
+			switch outcome {
+			case Win:
+				if pHand.Status == Blackjack {
+					payout = int(float64(wager) * g.Config.BlackjackPayout)
+				} else {
+					payout = wager * g.Config.Payout
+				}
+				payout += wager
+				p.LocalWallet += payout
+			case Push:
+				p.LocalWallet += wager
 			}
+
 			e := store.Event{
 				Type: "Settled",
 				Payload: map[string]any{
-					"Result":      result,
-					"WagerAmount": hand.Bet,
+					"Result":      outcome,
+					"PlayerID":    p.ID,
+					"WagerAmount": wager,
 					"LocalWallet": p.LocalWallet,
 					"GameState":   g.State,
 				},
@@ -317,4 +351,42 @@ func (g *Game) Settle() {
 		}
 	})
 	g.State = StateBetsOpen
+}
+
+type Outcome string
+
+const (
+	Win  Outcome = "WIN"
+	Loss Outcome = "LOSS"
+	Push Outcome = "PUSH"
+)
+
+func EvaluateOutcome(pScore int, pStatus HandStatus, dScore int, dStatus HandStatus) Outcome {
+	// Blackjacks
+	if pStatus == Blackjack && dStatus == Blackjack {
+		return Push
+	}
+	if pStatus == Blackjack {
+		return Win
+	}
+	if dStatus == Blackjack {
+		return Loss
+	}
+
+	// Busts
+	if pStatus == Busted || pScore > 21 {
+		return Loss
+	}
+	if dStatus == Busted || dScore > 21 {
+		return Win
+	}
+
+	// Qualified Hands
+	if pScore > dScore {
+		return Win
+	}
+	if pScore < dScore {
+		return Loss
+	}
+	return Push
 }

@@ -94,7 +94,7 @@ func main() {
 			fmt.Println("Quitting game.")
 			return
 		default:
-			fmt.Println("unknown command:", cmd)
+			fmt.Println("Unknown command:", cmd)
 			continue
 		}
 		if err != nil {
