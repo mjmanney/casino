@@ -10,7 +10,23 @@ type SideBet struct {
 type SideBetType string
 
 const (
-	InsuranceBet  SideBetType = "insurance"
-	DealerBustBet SideBetType = "dealer bust"
-	PairBet       SideBetType = "pair"
+	InsuranceBet  SideBetType = "INSURANCE"
+	DealerBustBet SideBetType = "DEALER_BUST"
+	PairBet       SideBetType = "PLAYER_PAIR"
 )
+
+func NewSideBet(betType SideBetType, bet int) *SideBet {
+	return &SideBet{
+		Type:   betType,
+		Amount: bet,
+		Paid:   false,
+	}
+}
+
+func (s *SideBet) MarkPaid() {
+	s.Paid = true
+}
+
+func (s *SideBet) IsPaid() bool {
+	return s.Paid
+}

@@ -43,6 +43,9 @@ func (p *Player) Active() { p.Status = Active }
 func (p *Player) Idle()   { p.Status = Idle }
 func (p *Player) Reset()  { p.Hands = make([]*Hand, 0, MaxHandsPerPlayer); p.Status = Active }
 
+// Wager checks to ensure the Player has the funds to make a bet
+// and updates the players total bet and local wallet.  Ensure
+// to update the Hand's bet property elsewhere.
 func (p *Player) Wager(bet int) {
 	if bet > p.LocalWallet {
 		fmt.Print("not enough funds in local wallet")
@@ -61,30 +64,37 @@ func (p *Player) AddHand(h *Hand) {
 }
 
 // Check that the Player is elligble for SPLIT
-func (p *Player) CanSplit() bool {
-	// Check for the maximum hands
-	if len(p.Hands) < MaxHandsPerPlayer {
-		c1 := p.Hands[p.ActiveHand].Cards[0].Rank
-		c2 := p.Hands[p.ActiveHand].Cards[1].Rank
-
-		// Check for an exact pair
-		if c1 == c2 {
-			return true
-		}
-		/*
-			Check for two cards that have a value of ten
-			but are not an exact pair
-		*/
-		isValueTen := map[string]bool{
-			"10": true,
-			"J":  true,
-			"Q":  true,
-			"K":  true,
-		}
-
-		return isValueTen[c1] && isValueTen[c2]
+func (p *Player) CanSplit() (bool, error) {
+	if len(p.Hands) >= MaxHandsPerPlayer {
+		return false, fmt.Errorf("cannot split; player has maximum number of hands")
 	}
-	return false
+
+	if !p.Hands[p.ActiveHand].isFirstAction() {
+		return false, fmt.Errorf("cannot split; player can only split on first action of hand")
+	}
+
+	c1 := p.Hands[p.ActiveHand].Cards[0].Rank
+	c2 := p.Hands[p.ActiveHand].Cards[1].Rank
+
+	if c1 == c2 {
+		return true, nil
+	}
+
+	var match bool
+	isValueTen := map[string]bool{
+		"10": true,
+		"J":  true,
+		"Q":  true,
+		"K":  true,
+	}
+
+	match = isValueTen[c1] && isValueTen[c2]
+
+	if !match {
+		return match, fmt.Errorf("cannot split; cards are not same value")
+	}
+
+	return match, nil
 }
 
 //	----- Hand Structures -----
@@ -95,7 +105,7 @@ type Hand struct {
 	Cards      []Card
 	Status     HandStatus
 	Bet        int
-	SideBets   []SideBet
+	SideBets   []*SideBet
 	DoubleDown bool
 	IsSplit    bool
 }
@@ -134,11 +144,15 @@ func (h *Hand) Blackjack() { h.Status = Blackjack }
 func (h *Hand) Surrender() { h.Status = Surrendered }
 func (h *Hand) Settled()   { h.Status = Settled }
 
-// Returns the total value of a hand.
-func (h Hand) Value() int {
-	total := 0
-	aces := 0
+// Caclulates the hand total.
+// If includeHidden is false, hidden cards are ignored.
+func (h Hand) valueCore(includeHidden bool) int {
+	total, aces := 0, 0
+
 	for _, c := range h.Cards {
+		if c.Hidden && !includeHidden {
+			continue
+		}
 		switch c.Rank {
 		case "A":
 			total += 11
@@ -146,10 +160,13 @@ func (h Hand) Value() int {
 		case "K", "Q", "J":
 			total += 10
 		default:
-			v, _ := strconv.Atoi(c.Rank)
-			total += v
+			if v, err := strconv.Atoi(c.Rank); err == nil {
+				total += v
+			}
 		}
 	}
+
+	// Downgrade aces from 11→1 if value is over 21
 	for total > 21 && aces > 0 {
 		total -= 10
 		aces--
@@ -157,9 +174,23 @@ func (h Hand) Value() int {
 	return total
 }
 
+// Returns the total of visible cards only.
+func (h Hand) Value() int { return h.valueCore(false) }
+
+// Returns the total including hidden cards.
+func (h Hand) ValueAll() int { return h.valueCore(true) }
+
 // Check for players blackjack.
 func (h Hand) checkBlackjack() {
 	if h.Value() == 21 && len(h.Cards) == 2 && !h.IsSplit {
 		h.Blackjack()
 	}
+}
+
+// Check that the hand is elligble for actions such as Double or Split.
+func (h Hand) isFirstAction() bool {
+	if len(h.Cards) != 2 || h.Status != Qualified {
+		return false
+	}
+	return true
 }

@@ -107,6 +107,13 @@ func (Double) Execute(g *Game, p *Player) (bool, error) {
 	}
 
 	hand := p.Hands[p.ActiveHand]
+
+	if !hand.isFirstAction() {
+		return false, fmt.Errorf("can only double on first action")
+	}
+
+	doubleBetAmount := hand.Bet
+	p.Wager(doubleBetAmount)
 	card := g.Dealer.Shoe.Draw()
 	hand.Cards = append(hand.Cards, card)
 
@@ -114,6 +121,7 @@ func (Double) Execute(g *Game, p *Player) (bool, error) {
 		Type: "Double",
 		Payload: map[string]any{
 			"PlayerID": p.ID,
+			"TotalBet": p.TotalBet,
 			"Card":     card,
 		},
 	}
@@ -131,44 +139,56 @@ Doubles allowed after splitting.
 */
 type Split struct{}
 
-// Execute applies the Split action to the supplied player.
 func (Split) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StatePlayerTurn {
 		return false, fmt.Errorf("cannot split while in %s", g.State)
 	}
-	if !p.CanSplit() {
-		return false, fmt.Errorf("cannot split due to maximum number of hands or different card values")
+
+	canSplit, err := p.CanSplit()
+	if !canSplit {
+		return false, err
 	}
 
-	// Get the active hand
+	// Ok to split
 	hand := p.Hands[p.ActiveHand]
-	// Pop the last card from the current hand
-	splitCard := hand.Cards[len(hand.Cards)-1]
-	// Draw a card from the shoe
-	spDrawCard1 := g.Dealer.Shoe.Draw()
-	// Add the card to the active hand
-	hand.Cards = append(hand.Cards, spDrawCard1)
-	// Draw another card from the shoe
-	spDrawCard2 := g.Dealer.Shoe.Draw()
-	// Create the new split hand
-	splitConfig := SplitConfig{
+	splitBetAmount := hand.Bet
+	c1 := hand.Cards[0]
+	c2 := hand.Cards[1]
+	p.Wager(splitBetAmount)
+
+	// Active hand becomes just the first card, in a new Cards slice.
+	hand.Cards = []Card{c1}
+	hand.IsSplit = true
+	hand.DoubleDown = false
+	hand.Status = Qualified
+
+	cardForActiveHand := g.Dealer.Shoe.Draw()
+	hand.Cards = append(hand.Cards, cardForActiveHand)
+
+	// New hand starts with the second card and a turn is injected into the turn queue.
+	cardForSplitHand := g.Dealer.Shoe.Draw()
+	splitHand := NewHand(splitBetAmount, SplitConfig{
 		Index:   HandIndex(len(p.Hands)),
-		Cards:   []Card{splitCard, spDrawCard2},
+		Cards:   []Card{c2, cardForSplitHand},
 		IsSplit: true,
-	}
-	newSplitHand := NewHand(hand.Bet, splitConfig)
-	p.AddHand(newSplitHand)
+	})
+
+	// Append the new hand and inject its turn to be played next.
+	p.AddHand(splitHand)
 	g.InjectNext(Turn{
 		Player: p,
-		Hand:   newSplitHand,
+		Hand:   splitHand,
 	})
-	e := store.Event{
+
+	g.Store.Append(store.Event{
 		Type: "Split",
 		Payload: map[string]any{
-			"PlayerID": p.ID,
+			"PlayerID":   p.ID,
+			"ActiveHand": fmt.Sprintf("%v", hand.Cards),
+			"SplitHand":  fmt.Sprintf("%v", splitHand.Cards),
 		},
-	}
-	g.Store.Append(e)
+	})
+
 	return false, nil
 }
 
@@ -188,16 +208,18 @@ func (Insurance) Execute(g *Game, p *Player) (bool, error) {
 		return false, fmt.Errorf("cannot accept insurance while in %s", g.State)
 	}
 
-	/*
-	   TODO:
-	*/
+	hand := p.Hands[p.ActiveHand]
+	insuranceBetAmount := hand.Bet / 2
+	p.Wager(insuranceBetAmount)
+	insuranceBet := NewSideBet(InsuranceBet, insuranceBetAmount)
+	hand.SideBets = append(hand.SideBets, insuranceBet)
 
 	e := store.Event{
 		Type: "Insurance",
 		Payload: map[string]any{
 			"PlayerID": p.ID,
-			"Insured":  false,
-			"Amount":   0,
+			"Insured":  true,
+			"Amount":   insuranceBetAmount,
 		},
 	}
 

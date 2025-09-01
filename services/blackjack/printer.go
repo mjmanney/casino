@@ -48,6 +48,15 @@ func PrintHand(hand Hand) {
 	for _, card := range c {
 		PrintCard(card)
 	}
+
+	switch hand.Status {
+	case Blackjack:
+		fmt.Print(" ⇒ ", hand.Value(), " BLACKJACK ✪ ")
+	case Busted:
+		fmt.Print(" ⇒ ", hand.Value(), " BUSTED ✖")
+	default:
+		fmt.Print(" ⇒ ", hand.Value())
+	}
 }
 
 func PrintDeck(deck *Deck) {

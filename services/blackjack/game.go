@@ -6,6 +6,7 @@ import (
 	"casino/libs/store"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 )
@@ -223,7 +224,7 @@ func (g *Game) checkBlackjack() {
 	}
 
 	fmt.Println("Dealer peeking...")
-	if g.Dealer.Hand.Value() == 21 {
+	if g.Dealer.Hand.ValueAll() == 21 {
 		g.Dealer.RevealHoleCard()
 		g.Dealer.Hand.Status = Blackjack
 		fmt.Println("Dealer has blackjack.")
@@ -241,10 +242,10 @@ If dealer Ace is the up card, insurance is offered to players.
 Dealer's Blackjack ends the round immedatiely.
 */
 func (g *Game) dealerPeek() {
-	if g.State != StateDealCards {
-		return
-	}
 	for _, card := range g.Dealer.Hand.Cards {
+		if g.State != StateDealCards {
+			break
+		}
 		if !card.Hidden {
 			switch card.Rank {
 			case "A":
@@ -263,6 +264,37 @@ func (g *Game) dealerPeek() {
 // TODO - add insurance bets
 func (g *Game) offerInsurance() {
 	fmt.Println("Insurance open.")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	g.DoForEachPlayer(func(p *Player) {
+		fmt.Printf("\n%s, Insurance? (y/n): ", p.Name)
+		// Block until a line is entered
+		if !scanner.Scan() {
+			// EOF or input error
+			if err := scanner.Err(); err != nil {
+				fmt.Printf("input error while reading insurance prompt for %s: %v", p.Name, err)
+			} else {
+				fmt.Printf("no more input (EOF) while reading insurance prompt for %s", p.Name)
+			}
+			return
+		}
+		response := scanner.Text()
+		var err error
+		endTurn := false
+		if response == "y" {
+			endTurn, err = g.ApplyAction(p.ID, Insurance{})
+		}
+
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+
+		if endTurn {
+			_, _ = g.AdvanceTurn()
+		}
+
+	})
+
 	fmt.Println("Insurance closed.")
 }
 
@@ -318,6 +350,40 @@ func (g *Game) Settle() {
 	}
 	dScore := g.Dealer.Hand.Value()
 
+	// Settle Insurance Bets
+	g.DoForEachPlayer(func(p *Player) {
+		hand := p.Hands[p.ActiveHand]
+		if len(hand.SideBets) == 0 {
+			return
+		}
+
+		insuranceSideBet := latestUnpaidSideBet(hand.SideBets, InsuranceBet)
+
+		if g.Dealer.Hand.Status == Blackjack && !insuranceSideBet.Paid {
+			payout := int(math.Round(float64(insuranceSideBet.Amount) * float64(g.Config.InsurancePayout)))
+			payout += insuranceSideBet.Amount
+			insuranceSideBet.MarkPaid()
+			p.LocalWallet += payout
+			g.Store.Append(store.Event{
+				Type: "InsurancePaid",
+				Payload: map[string]any{
+					"PlayerID":    p.ID,
+					"LocalWallet": p.LocalWallet,
+					"Amount":      payout,
+				},
+			})
+		} else {
+			g.Store.Append(store.Event{
+				Type: "InsuranceLost",
+				Payload: map[string]any{
+					"PlayerID": p.ID,
+					"Amount":   insuranceSideBet.Amount,
+				},
+			})
+		}
+	})
+
+	// Settle Main Bets
 	g.DoForEachPlayer(func(p *Player) {
 		for h := range p.Hands {
 			pHand := p.Hands[h]
@@ -350,6 +416,7 @@ func (g *Game) Settle() {
 			g.Store.Append(e)
 		}
 	})
+
 	g.State = StateBetsOpen
 }
 
@@ -360,6 +427,20 @@ const (
 	Loss Outcome = "LOSS"
 	Push Outcome = "PUSH"
 )
+
+// Returns the of most recent unpaid side bet of a given type, otherwise returns nil.
+func latestUnpaidSideBet(bets []*SideBet, t SideBetType) *SideBet {
+	for i := len(bets) - 1; i >= 0; i-- {
+		sb := bets[i]
+		if sb == nil {
+			continue
+		}
+		if sb.Type == t && !sb.Paid {
+			return sb
+		}
+	}
+	return nil
+}
 
 func EvaluateOutcome(pScore int, pStatus HandStatus, dScore int, dStatus HandStatus) Outcome {
 	// Blackjacks
