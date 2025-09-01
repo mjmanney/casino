@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type Dealer struct {
 	Name string
 	Shoe *Shoe
@@ -13,5 +15,12 @@ func NewDealer(name string) *Dealer {
 			Cards: []Card{},
 		},
 		Shoe: &Shoe{},
+	}
+}
+
+func (d *Dealer) RevealHoleCard() {
+	if len(d.Hand.Cards) > 1 {
+		fmt.Print("Revealing hidden card...")
+		d.Hand.Cards[1].Hidden = false
 	}
 }

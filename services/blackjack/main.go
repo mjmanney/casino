@@ -13,36 +13,62 @@ func main() {
 	st := store.NewEventStore()
 
 	// 2. Initialize Players
-	p1 := NewPlayer("1", "PlayerOne")
-	//p2 := NewPlayer("2", "PlayerTwo")
-	//p3 := NewPlayer("3", "PlayerThree")
+	p1 := NewPlayer("1", "Fedor")
+	p2 := NewPlayer("2", "Shane")
+	p3 := NewPlayer("3", "Jason")
 
 	// 3. Initialize Game
 	g := NewGame(st)
 	g.Seat1 = p1
-	//g.Seat2 = p2
-	//g.Seat3 = p3
+	g.Seat2 = p2
+	g.Seat3 = p3
 
 	// 4. Open table and shuffle cards
 	g.Shuffle()
 
 	// 5. Bet loop
-	p1.TotalBet = 100
+	g.PlaceBets()
 
-	// 6. Round
-	g.StartRound()
-
-	// 7. Deal cards
+	// 6. Deal cards
 	g.DealCards()
+	PrintDealerHand(g)
 
-	fmt.Println("Player hand:")
-	PrintHand(*p1.Hands[p1.ActiveHand])
-	fmt.Println("Dealer hand:")
-	PrintHand(*g.Dealer.Hand)
+	// Sets up the initial turn queue
+	if g.State == StatePlayerTurn {
+		g.DoForEachPlayer(func(p *Player) {
+			PrintPlayerHand(p)
+			turn := NewTurn(p, p.Hands[0])
+			g.Enqueue(*turn)
+		})
+	}
 
-	scanner := bufio.NewScanner(os.Stdin)
+	// 7. Players Take Action
 	for g.State == StatePlayerTurn {
-		fmt.Print("Enter action (h)it/(s)tand/(d)ouble/(sp)lit/(q)uit: ")
+		// 1) Peek current turn without removing it
+		turn, ok := g.Peek()
+		p := turn.Player
+
+		if !ok {
+			// no more turns → move on
+			g.State = StateDealerTurn
+			break
+		}
+		if p == nil {
+			fmt.Println("nil Player in turn; skipping")
+			// Safely remove the bad turn and continue
+			g.AdvanceTurn()
+			continue
+		}
+
+		if p.Hands[p.ActiveHand].Status == Blackjack {
+			fmt.Println("Player has blackjack; skipping")
+			g.AdvanceTurn()
+			continue
+		}
+
+		PrintPlayerHand(p)
+		fmt.Printf("\nPlayer ID:%s, Enter action (h)it/(s)tand/(d)ouble/(sp)lit/(q)uit: ", p.ID)
+		scanner := bufio.NewScanner(os.Stdin)
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
 				fmt.Println("Error reading input:", err)
@@ -51,18 +77,19 @@ func main() {
 			}
 			return
 		}
-		cmd := scanner.Text() // requires trailing Enter
+		cmd := scanner.Text()
 		_ = cmd
 		var err error
+		endTurn := false
 		switch cmd {
 		case "h":
-			err = g.ApplyAction(p1.ID, Hit{})
+			endTurn, err = g.ApplyAction(p.ID, Hit{})
 		case "s":
-			err = g.ApplyAction(p1.ID, Stand{})
+			endTurn, err = g.ApplyAction(p.ID, Stand{})
 		case "d":
-			err = g.ApplyAction(p1.ID, Double{})
+			endTurn, err = g.ApplyAction(p.ID, Double{})
 		case "sp":
-			err = g.ApplyAction(p1.ID, Split{})
+			endTurn, err = g.ApplyAction(p.ID, Split{})
 		case "q":
 			fmt.Println("Quitting game.")
 			return
@@ -73,8 +100,11 @@ func main() {
 		if err != nil {
 			fmt.Println("error:", err)
 		}
-		fmt.Println("Player hand:")
-		PrintHand(*p1.Hands[p1.ActiveHand])
+		PrintPlayerHand(p)
+
+		if endTurn {
+			_, _ = g.AdvanceTurn()
+		}
 	}
 
 	g.DealerPlay()

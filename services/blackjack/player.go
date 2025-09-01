@@ -10,12 +10,14 @@ const MaxHandsPerPlayer = 4
 //	----- Player Structures -----
 
 type Player struct {
-	ID         string
-	Name       string
-	Hands      []*Hand
-	TotalBet   int
-	Status     PlayerStatus
-	ActiveHand HandIndex
+	ID           string
+	Name         string
+	Hands        []*Hand
+	TotalBet     int
+	LocalWallet  int // Bankroll for each game session
+	GlobalWallet int // Wallet that persists across game sessions
+	Status       PlayerStatus
+	ActiveHand   HandIndex
 }
 
 type PlayerStatus int
@@ -27,17 +29,27 @@ const (
 
 func NewPlayer(id string, name string) *Player {
 	return &Player{
-		ID:       id,
-		Name:     name,
-		Hands:    make([]*Hand, 0, MaxHandsPerPlayer),
-		TotalBet: 0,
-		Status:   Active,
+		ID:           id,
+		Name:         name,
+		Hands:        make([]*Hand, 0, MaxHandsPerPlayer),
+		TotalBet:     0,
+		LocalWallet:  10000,
+		GlobalWallet: 990000,
+		Status:       Active,
 	}
 }
 
 func (p *Player) Active() { p.Status = Active }
 func (p *Player) Idle()   { p.Status = Idle }
-func (p *Player) Reset()  { p.Hands = nil; p.Status = Active }
+func (p *Player) Reset()  { p.Hands = make([]*Hand, 0, MaxHandsPerPlayer); p.Status = Active }
+
+func (p *Player) Wager(bet int) {
+	if bet > p.LocalWallet {
+		fmt.Print("not enough funds in local wallet")
+	}
+	p.TotalBet += bet
+	p.LocalWallet -= bet
+}
 
 // Add hand to the players collection.
 func (p *Player) AddHand(h *Hand) {
@@ -85,7 +97,7 @@ type Hand struct {
 	Bet        int
 	SideBets   []SideBet
 	DoubleDown bool
-	SplitFrom  HandIndex
+	IsSplit    bool
 }
 
 func NewHand(bet int, opts SplitConfig) *Hand {
@@ -95,18 +107,17 @@ func NewHand(bet int, opts SplitConfig) *Hand {
 		Status:     Qualified,
 		Bet:        bet,
 		DoubleDown: false,
-		SplitFrom:  opts.SplitFrom,
+		IsSplit:    opts.IsSplit,
 	}
 }
 
 type SplitConfig struct {
-	Index     HandIndex
-	Cards     []Card
-	SplitFrom HandIndex
+	Index   HandIndex
+	Cards   []Card
+	IsSplit bool
 }
 
 type HandIndex int
-
 type HandStatus int
 
 const (
@@ -144,4 +155,11 @@ func (h Hand) Value() int {
 		aces--
 	}
 	return total
+}
+
+// Check for players blackjack.
+func (h Hand) checkBlackjack() {
+	if h.Value() == 21 && len(h.Cards) == 2 && !h.IsSplit {
+		h.Blackjack()
+	}
 }

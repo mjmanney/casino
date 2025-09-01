@@ -15,6 +15,16 @@ type Card struct {
 	Hidden bool
 }
 
+func (c Card) String() string {
+	suitSymbols := map[string]string{
+		"Hearts":   "♥",
+		"Diamonds": "♦",
+		"Clubs":    "♣",
+		"Spades":   "♠",
+	}
+	return fmt.Sprintf("%s%s", c.Rank, suitSymbols[c.Suit])
+}
+
 // Holds a collection of cards.
 type Deck struct {
 	cards []Card
@@ -104,50 +114,4 @@ func (s *Shoe) Shuffle(penetration float64) {
 	s.pos = 0
 	s.rng.Shuffle(len(s.cards), func(i, j int) { s.cards[i], s.cards[j] = s.cards[j], s.cards[i] })
 	s.placeCutCard(penetration)
-}
-
-//	----- Debugging -----
-
-func PrintCard(card Card) {
-	suitSymbols := map[string]string{
-		"Hearts":   "♥",
-		"Diamonds": "♦",
-		"Clubs":    "♣",
-		"Spades":   "♠",
-	}
-
-	if !card.Hidden {
-		fmt.Println("+---------+")
-		fmt.Printf("| %-6s  |\n", card.Rank)
-		fmt.Println("|         |")
-		fmt.Printf("|    %-2s   |\n", suitSymbols[card.Suit])
-		fmt.Println("|         |")
-		fmt.Printf("|%8s |\n", card.Rank)
-		fmt.Println("+---------+")
-	} else {
-		fmt.Println("+---------+")
-		fmt.Printf("| %-6s  |\n", "?")
-		fmt.Println("|         |")
-		fmt.Printf("|    %-2s   |\n", "?")
-		fmt.Println("|         |")
-		fmt.Printf("|%8s |\n", "?")
-		fmt.Println("+---------+")
-
-	}
-}
-
-func PrintHand(hand Hand) {
-	c := hand.Cards
-	for _, card := range c {
-		PrintCard(card)
-	}
-}
-
-func PrintDeck(deck *Deck) {
-	for i, card := range deck.cards {
-		PrintCard(card)
-		if (i+1)%4 == 0 { // Add a line break every 4 cards for better readability
-			fmt.Println()
-		}
-	}
 }

@@ -7,10 +7,10 @@ import (
 
 // Action is the interface every game command implements.
 type Action interface {
-	Execute(g *Game, p *Player) error
+	Execute(g *Game, p *Player) (endTurn bool, err error)
 }
 
-func (g *Game) ApplyAction(playerID string, a Action) error {
+func (g *Game) ApplyAction(playerID string, a Action) (bool, error) {
 	var p *Player
 	switch playerID {
 	case g.Seat1.ID:
@@ -21,7 +21,7 @@ func (g *Game) ApplyAction(playerID string, a Action) error {
 		p = g.Seat3
 	}
 	if p == nil {
-		return fmt.Errorf("unknown player %s", playerID)
+		return false, fmt.Errorf("unknown player %s", playerID)
 	}
 	return a.Execute(g, p)
 }
@@ -35,12 +35,16 @@ continue to HIT if the total hand value is <= 21.
 */
 type Hit struct{}
 
-func (Hit) Execute(g *Game, p *Player) error {
+func (Hit) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot hit while in %s", g.State)
+		return false, fmt.Errorf("cannot hit while in %s", g.State)
 	}
 
 	hand := p.Hands[p.ActiveHand]
+	if hand.Status == Busted {
+		return false, fmt.Errorf("hit not applicable; player busted")
+	}
+
 	card := g.Dealer.Shoe.Draw()
 	hand.Cards = append(hand.Cards, card)
 
@@ -54,11 +58,11 @@ func (Hit) Execute(g *Game, p *Player) error {
 	g.Store.Append(e)
 	if hand.Value() > 21 {
 		hand.Bust()
-		g.AdvanceTurn()
+		return true, nil
 	} else if hand.Value() == 21 {
-		g.AdvanceTurn()
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 //	----- Stand -----
@@ -66,15 +70,15 @@ func (Hit) Execute(g *Game, p *Player) error {
 // Player may STAND to end the turn with a qualifying hand.
 type Stand struct{}
 
-func (Stand) Execute(g *Game, p *Player) error {
+func (Stand) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot stand while in %s", g.State)
+		return false, fmt.Errorf("cannot stand while in %s", g.State)
 	}
 
 	hand := p.Hands[p.ActiveHand]
 
 	if hand.Status == Busted {
-		return fmt.Errorf("stand not applicable; player busted")
+		return false, fmt.Errorf("stand not applicable; player busted")
 	}
 
 	e := store.Event{
@@ -85,8 +89,7 @@ func (Stand) Execute(g *Game, p *Player) error {
 		},
 	}
 	g.Store.Append(e)
-	g.AdvanceTurn()
-	return nil
+	return true, nil
 }
 
 //	----- Double -----
@@ -98,9 +101,9 @@ of a turn.
 */
 type Double struct{}
 
-func (Double) Execute(g *Game, p *Player) error {
+func (Double) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot double while in %s", g.State)
+		return false, fmt.Errorf("cannot double while in %s", g.State)
 	}
 
 	hand := p.Hands[p.ActiveHand]
@@ -115,8 +118,7 @@ func (Double) Execute(g *Game, p *Player) error {
 		},
 	}
 	g.Store.Append(e)
-	g.AdvanceTurn()
-	return nil
+	return true, nil
 }
 
 //	----- Split -----
@@ -130,12 +132,12 @@ Doubles allowed after splitting.
 type Split struct{}
 
 // Execute applies the Split action to the supplied player.
-func (Split) Execute(g *Game, p *Player) error {
+func (Split) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot split while in %s", g.State)
+		return false, fmt.Errorf("cannot split while in %s", g.State)
 	}
 	if !p.CanSplit() {
-		return fmt.Errorf("cannot split due to maximum number of hands or different card values")
+		return false, fmt.Errorf("cannot split due to maximum number of hands or different card values")
 	}
 
 	// Get the active hand
@@ -150,9 +152,9 @@ func (Split) Execute(g *Game, p *Player) error {
 	spDrawCard2 := g.Dealer.Shoe.Draw()
 	// Create the new split hand
 	splitConfig := SplitConfig{
-		Index:     HandIndex(len(p.Hands)),
-		Cards:     []Card{splitCard, spDrawCard2},
-		SplitFrom: p.ActiveHand,
+		Index:   HandIndex(len(p.Hands)),
+		Cards:   []Card{splitCard, spDrawCard2},
+		IsSplit: true,
 	}
 	newSplitHand := NewHand(hand.Bet, splitConfig)
 	p.AddHand(newSplitHand)
@@ -167,7 +169,7 @@ func (Split) Execute(g *Game, p *Player) error {
 		},
 	}
 	g.Store.Append(e)
-	return nil
+	return false, nil
 }
 
 //	----- Insurance -----
@@ -181,9 +183,9 @@ Offered after all cards are dealt and before the first player action.
 */
 type Insurance struct{}
 
-func (Insurance) Execute(g *Game, p *Player) error {
+func (Insurance) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StateInsuranceTurn {
-		return fmt.Errorf("cannot accept insurance while in %s", g.State)
+		return false, fmt.Errorf("cannot accept insurance while in %s", g.State)
 	}
 
 	/*
@@ -200,7 +202,7 @@ func (Insurance) Execute(g *Game, p *Player) error {
 	}
 
 	g.Store.Append(e)
-	return nil
+	return false, nil
 }
 
 //	----- Surrender -----
@@ -211,9 +213,9 @@ Available only on the first action of a turn.
 */
 type Surrender struct{}
 
-func (Surrender) Execute(g *Game, p *Player) error {
+func (Surrender) Execute(g *Game, p *Player) (bool, error) {
 	if g.State != StatePlayerTurn {
-		return fmt.Errorf("cannot surrender while in %s", g.State)
+		return false, fmt.Errorf("cannot surrender while in %s", g.State)
 	}
 
 	e := store.Event{
@@ -224,6 +226,5 @@ func (Surrender) Execute(g *Game, p *Player) error {
 	}
 
 	g.Store.Append(e)
-	g.AdvanceTurn()
-	return nil
+	return true, nil
 }

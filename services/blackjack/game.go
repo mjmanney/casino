@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"casino/libs/fsm"
 	"casino/libs/store"
 	"fmt"
+	"os"
+	"strconv"
 )
 
 //	----- Game State Machine -----
@@ -49,6 +52,10 @@ func NewGame(store *store.EventStore) *Game {
 	}
 }
 
+func (g *Game) TableOpen() {
+	g.State = StateTableOpen
+}
+
 // Returns the seats in dealing order, including nils (so we can skip them).
 func (g *Game) GetSeats() []*Player {
 	return []*Player{g.Seat1, g.Seat2, g.Seat3}
@@ -70,8 +77,11 @@ func (g *Game) Shuffle() {
 	g.State = StateShuffleCards
 
 	g.Store.Append(store.Event{
-		Type:    "Shuffling Cards",
-		Payload: map[string]any{"state": g.State},
+		Type: "Shuffle",
+		Payload: map[string]any{
+			"Message":   "Minting new decks and shuffling.",
+			"GameState": g.State,
+		},
 	})
 
 	d1 := NewDeck()
@@ -84,6 +94,45 @@ func (g *Game) Shuffle() {
 	g.Dealer.Shoe = NewShoe(0.65, d1, d2, d3, d4, d5, d6)
 
 	g.State = StateBetsOpen
+}
+
+func (g *Game) PlaceBets() {
+	if g.State != StateBetsOpen {
+		return
+	}
+	// TODO Player checks for minimum buy in (wallet amount)
+	// TODO Player places a wager between table min and max
+	// StateBetsOpen lasts for a maximum of 15 seconds
+	// Or until player confirms they are ready to play
+	scanner := bufio.NewScanner(os.Stdin)
+	g.DoForEachPlayer(func(p *Player) {
+		fmt.Printf("\n%s, Place a wager: ", p.Name)
+		// Block until a line is entered
+		if !scanner.Scan() {
+			// EOF or input error
+			if err := scanner.Err(); err != nil {
+				fmt.Printf("input error while reading wager for %s: %v", p.Name, err)
+			} else {
+				fmt.Printf("no more input (EOF) while reading wager for %s", p.Name)
+			}
+			return
+		}
+		cmd := scanner.Text()
+		betAmount, err := strconv.Atoi(cmd)
+		if err != nil {
+			p.Wager(betAmount)
+			e := store.Event{
+				Type: "PlacedWager",
+				Payload: map[string]any{
+					"Player":    p.Name,
+					"GameState": g.State,
+					"Wager":     betAmount,
+				},
+			}
+			g.Store.Append(e)
+		}
+	})
+	g.State = StateBetsClosed
 }
 
 // Call this when the cut card is reached (e.g., between rounds)
@@ -104,27 +153,6 @@ func (g *Game) ReshuffleShoe() {
 	g.State = StateBetsOpen
 }
 
-// StartRound initializes a new round
-func (g *Game) StartRound() {
-	if g.State != StateBetsOpen {
-		return
-	}
-	betAmount := g.Seat1.TotalBet // TODO: Update
-	e := store.Event{
-		Type: "StartRound",
-		Payload: map[string]any{
-			"state":     g.State,
-			"betAmount": betAmount,
-		},
-	}
-	g.Store.Append(e)
-	// TODO Player checks for minimum buy in (wallet amount)
-	// TODO Player places a wager between table min and max
-	// StateBetsOpen lasts for a maximum of 15 seconds
-	// Or until player confirms they are ready to play
-	g.State = StateBetsClosed
-}
-
 // Deal cards to all players at the table.  One card is dealt to each player in order, then the dealer.
 // On the second pass, the dealer's hole card is hidden.
 func (g *Game) DealCards() {
@@ -135,7 +163,7 @@ func (g *Game) DealCards() {
 	e := store.Event{
 		Type: "Dealing Cards",
 		Payload: map[string]any{
-			"state": g.State,
+			"GameState": g.State,
 		},
 	}
 	g.Store.Append(e)
@@ -145,7 +173,7 @@ func (g *Game) DealCards() {
 		p.AddHand(hand)
 	})
 
-	for pass := 0; pass < 2; pass++ {
+	for pass := range 2 {
 		g.DoForEachPlayer(func(p *Player) {
 			card := g.Dealer.Shoe.Draw()
 			p.Hands[p.ActiveHand].Cards = append(p.Hands[p.ActiveHand].Cards, card)
@@ -158,8 +186,9 @@ func (g *Game) DealCards() {
 			g.Dealer.Hand.Cards = append(g.Dealer.Hand.Cards, card)
 		}
 	}
-
-	g.EnqueueRoundStart()
+	g.DoForEachPlayer(func(p *Player) {
+		p.Hands[p.ActiveHand].checkBlackjack()
+	})
 	g.dealerPeek()
 }
 
@@ -171,6 +200,7 @@ func (g *Game) checkBlackjack() {
 
 	fmt.Println("Dealer peeking...")
 	if g.Dealer.Hand.Value() == 21 {
+		g.Dealer.RevealHoleCard()
 		fmt.Println("Dealer has blackjack")
 		g.State = StateBetsSettle
 	} else {
@@ -179,6 +209,12 @@ func (g *Game) checkBlackjack() {
 	}
 }
 
+/*
+Last step after cards are dealt.
+Dealer checks their hand for Blackjack.
+If dealer Ace is the up card, insurance is offered to players.
+Dealer's Blackjack ends the round immedatiely.
+*/
 func (g *Game) dealerPeek() {
 	if g.State != StateDealCards {
 		return
@@ -189,6 +225,7 @@ func (g *Game) dealerPeek() {
 			case "A":
 				g.State = StateInsuranceTurn
 				g.offerInsurance()
+				g.checkBlackjack()
 			case "10", "J", "Q", "K":
 				g.checkBlackjack()
 			default:
@@ -198,12 +235,17 @@ func (g *Game) dealerPeek() {
 	}
 }
 
+// TODO - add insurance bets
 func (g *Game) offerInsurance() {
 	fmt.Println("Insurance open.")
 	fmt.Println("Insurance closed.")
 }
 
-// DealerPlay draws cards for the dealer per blackjack rules.
+/*
+Draws cards for the dealer.
+Dealer stands on all 17s.
+If all players have busted, the dealer reveals the hole card and does not draw.
+*/
 func (g *Game) DealerPlay() {
 	if g.State != StateDealerTurn {
 		return
@@ -217,17 +259,14 @@ func (g *Game) DealerPlay() {
 	}
 	g.Store.Append(e)
 
-	g.Dealer.Hand.Cards[1].Hidden = false
-	fmt.Println("flipping hidden card....")
-	PrintHand(*g.Dealer.Hand)
-	// If all players have busted, dealer only shows hidden card
-	// they do not continue to draw
+	g.Dealer.RevealHoleCard()
+	PrintDealerHand(g)
 	if !g.AllPlayersBusted() {
 		for g.Dealer.Hand.Value() < 17 {
 			card := g.Dealer.Shoe.Draw()
 			g.Dealer.Hand.Cards = append(g.Dealer.Hand.Cards, card)
 			g.Store.Append(store.Event{Type: "DealerHit", Payload: card})
-			PrintHand(*g.Dealer.Hand)
+			PrintDealerHand(g)
 		}
 	}
 	g.State = StateBetsSettle
@@ -252,21 +291,30 @@ func (g *Game) Settle() {
 	if g.State != StateBetsSettle {
 		return
 	}
-	player := g.Seat1.Hands[0].Value() // TODO: Update
-	dealer := g.Dealer.Hand.Value()
-	result := "PUSH"
-	if player > 21 || (dealer <= 21 && dealer > player) {
-		result = "DEALER WINS"
-	} else if dealer > 21 || player > dealer {
-		result = "PLAYER WINS"
-	}
-	e := store.Event{
-		Type: "Settled",
-		Payload: map[string]any{
-			"state":  g.State,
-			"result": result,
-		},
-	}
-	g.Store.Append(e)
+	dScore := g.Dealer.Hand.Value()
+
+	g.DoForEachPlayer(func(p *Player) {
+		for h := range p.Hands {
+			hand := p.Hands[h]
+			pScore := hand.Value()
+			result := "PUSH"
+			if pScore > 21 || (dScore <= 21 && dScore > pScore) {
+				result = "LOSS"
+			} else if dScore > 21 || pScore > dScore {
+				p.LocalWallet += hand.Bet
+				result = "WIN"
+			}
+			e := store.Event{
+				Type: "Settled",
+				Payload: map[string]any{
+					"Result":      result,
+					"WagerAmount": hand.Bet,
+					"LocalWallet": p.LocalWallet,
+					"GameState":   g.State,
+				},
+			}
+			g.Store.Append(e)
+		}
+	})
 	g.State = StateBetsOpen
 }
