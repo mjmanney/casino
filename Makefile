@@ -17,7 +17,7 @@ all: ## Start infra & build
 go-build-services: ## Build api+game -> bin/
 	mkdir -p $(BIN_DIR)
 	go build -o $(BIN_DIR)/api  ./services/api
-	go build -o $(BIN_DIR)/blackjack ./services/blackjack
+	go build -o $(BIN_DIR)/blackjack ./cmd/blackjack
 
 go-run-services: ## Run api+game via go run
 	@echo "Starting API service..." ; \
@@ -25,7 +25,7 @@ go-run-services: ## Run api+game via go run
 		API_PID=$$! ; \
 		echo "Starting Blackjack service (foreground)..." ; \
 		trap "kill $$API_PID 2>/dev/null || true" INT TERM EXIT ; \
-		go run ./services/blackjack ; \
+		go run ./cmd/blackjack ; \
 		STATUS=$$? ; \
 		kill $$API_PID 2>/dev/null || true ; \
 		wait $$API_PID 2>/dev/null || true ; \

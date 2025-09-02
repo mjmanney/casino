@@ -1,4 +1,4 @@
-package main
+package blackjack
 
 import (
 	"fmt"
@@ -40,7 +40,11 @@ func NewPlayer(id string, name string) *Player {
 
 func (p *Player) Active() { p.Status = Active }
 func (p *Player) Idle()   { p.Status = Idle }
-func (p *Player) Reset()  { p.Hands = make([]*Hand, 0, MaxHandsPerPlayer); p.Status = Active }
+func (p *Player) ClearHands() {
+	p.Hands = make([]*Hand, 0, MaxHandsPerPlayer)
+	p.AddHand(NewHand(0, SplitConfig{}))
+	p.TotalBet = 0
+}
 
 // Wager checks to ensure the Player has the funds to make a bet
 // and updates the players total bet and local wallet.  Ensure
@@ -68,7 +72,7 @@ func (player *Player) CanSplit(hand *Hand) (bool, error) {
 		return false, fmt.Errorf("cannot split; player has maximum number of hands")
 	}
 
-	if !hand.isFirstAction() {
+	if !hand.IsFirstAction() {
 		return false, fmt.Errorf("cannot split; player can only split on first action of hand")
 	}
 
@@ -189,7 +193,7 @@ func (h *Hand) checkBlackjack() bool {
 }
 
 // Check that the hand is elligble for actions such as Double or Split.
-func (h Hand) isFirstAction() bool {
+func (h Hand) IsFirstAction() bool {
 	if len(h.Cards) != 2 || h.Status != Qualified {
 		return false
 	}

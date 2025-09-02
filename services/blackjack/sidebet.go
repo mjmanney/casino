@@ -1,4 +1,4 @@
-package main
+package blackjack
 
 // Holds player side bets, including insurance.
 // All side bets are stored with the initial hand.
