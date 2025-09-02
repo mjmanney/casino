@@ -289,6 +289,11 @@ func (g *Game) Settle() {
 				p.LocalWallet += payout
 			case Push:
 				p.LocalWallet += wager
+			case Loss:
+				if h.Status == Surrendered {
+					wager = wager / 2
+					p.LocalWallet += wager
+				}
 			}
 
 			e := store.Event{
@@ -305,6 +310,9 @@ func (g *Game) Settle() {
 		}
 	})
 
+	if g.Dealer.Shoe.reshuffle {
+		g.ReshuffleShoe()
+	}
 	g.State = StateBetsOpen
 }
 
@@ -333,33 +341,39 @@ func (g *Game) GetSeats() []*Player {
 }
 
 // Evaulates and returns player WIN, LOSS or PUSH.
-func EvaluateOutcome(pScore int, pStatus HandStatus, dScore int, dStatus HandStatus) Outcome {
-	// Blackjacks
-	if pStatus == Blackjack && dStatus == Blackjack {
+func EvaluateOutcome(pScore int, pHandStatus HandStatus, dScore int, dHandStatus HandStatus) Outcome {
+	// Surrender
+	if pHandStatus == Surrendered {
+		return Loss
+	}
+
+	// Blackjack
+	if pHandStatus == Blackjack && dHandStatus == Blackjack {
 		return Push
 	}
-	if pStatus == Blackjack {
+	if pHandStatus == Blackjack {
 		return Win
 	}
-	if dStatus == Blackjack {
+	if dHandStatus == Blackjack {
 		return Loss
 	}
 
-	// Busts
-	if pStatus == Busted || pScore > 21 {
+	// Bust
+	if pHandStatus == Busted || pScore > 21 {
 		return Loss
 	}
-	if dStatus == Busted || dScore > 21 {
+	if dHandStatus == Busted || dScore > 21 {
 		return Win
 	}
 
-	// Qualified Hands
+	// Qualified Hand
 	if pScore > dScore {
 		return Win
 	}
 	if pScore < dScore {
 		return Loss
 	}
+
 	return Push
 }
 
@@ -467,11 +481,13 @@ func (g *Game) checkBlackjack() {
 
 // Shuffles the existing shoe.
 func (g *Game) ReshuffleShoe() {
+	if g.State != StateBetsSettle {
+		return
+	}
 	if g.Dealer.Shoe == nil {
 		g.Shuffle()
 		return
 	}
-
 	g.State = StateShuffleCards
 	g.Store.Append(store.Event{
 		Type: string(g.State),
@@ -479,7 +495,5 @@ func (g *Game) ReshuffleShoe() {
 			"Message": "Cut card removed - reshuffling.",
 		},
 	})
-
 	g.Dealer.Shoe.Shuffle(0.65)
-	g.State = StateBetsOpen
 }

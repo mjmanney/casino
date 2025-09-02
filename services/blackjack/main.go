@@ -64,7 +64,7 @@ func main() {
 		}
 
 		PrintPlayerHand(p, h)
-		fmt.Printf("\n%s, Enter action (h)it/(s)tand/(d)ouble/(sp)lit/(q)uit: ", p.Name)
+		fmt.Printf("\n%s, Enter action (h)it/(s)tand/(d)ouble/(sp)lit/(sur)render/(q)uit: ", p.Name)
 		scanner := bufio.NewScanner(os.Stdin)
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
@@ -87,6 +87,8 @@ func main() {
 			endTurn, err = g.ApplyAction(p.ID, Double{}, h)
 		case "sp":
 			endTurn, err = g.ApplyAction(p.ID, Split{}, h)
+		case "sur":
+			endTurn, err = g.ApplyAction(p.ID, Surrender{}, h)
 		case "q":
 			fmt.Println("Quitting game.")
 			return

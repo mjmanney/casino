@@ -108,6 +108,7 @@ func (Double) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	}
 
 	p.Wager(h.Bet)
+	h.DoubleDown = true
 	h.Bet += h.Bet
 	card := g.Dealer.Shoe.Draw()
 	h.Cards = append(h.Cards, card)
@@ -232,10 +233,17 @@ func (Surrender) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 		return false, fmt.Errorf("cannot surrender while in %s", g.State)
 	}
 
+	if !h.isFirstAction() {
+		return false, fmt.Errorf("can only surrender on first action")
+	}
+
+	h.Surrender()
+
 	e := store.Event{
 		Type: "Surrender",
 		Payload: map[string]any{
-			"PlayerID": p.ID,
+			"PlayerID":    p.ID,
+			"Surrendered": true,
 		},
 	}
 

@@ -32,11 +32,12 @@ type Deck struct {
 
 // Consists of one or more decks.
 type Shoe struct {
-	decks    uint
-	cards    []Card
-	pos      int
-	cutIndex int
-	rng      *rand.Rand
+	decks     uint
+	cards     []Card
+	pos       int
+	cutIndex  int
+	rng       *rand.Rand
+	reshuffle bool
 }
 
 // Creates a new standard 52-card deck.
@@ -77,10 +78,11 @@ func NewShoe(penetration float64, decks ...*Deck) *Shoe {
 	r.Shuffle(len(combined), func(i, j int) { combined[i], combined[j] = combined[j], combined[i] })
 
 	s := &Shoe{
-		decks: uint(len(decks)),
-		cards: combined,
-		pos:   0,
-		rng:   r,
+		decks:     uint(len(decks)),
+		cards:     combined,
+		pos:       0,
+		rng:       r,
+		reshuffle: false,
 	}
 	s.placeCutCard(penetration)
 	return s
@@ -97,7 +99,7 @@ func (s *Shoe) placeCutCard(penetration float64) {
 // Draws a card from the shoe.
 func (s *Shoe) Draw() Card {
 	if s.ReachedCutCard() {
-		// TODO: Finish the current round then reshuffle
+		s.reshuffle = true
 	}
 	c := s.cards[s.pos]
 	s.pos++
@@ -114,4 +116,5 @@ func (s *Shoe) Shuffle(penetration float64) {
 	s.pos = 0
 	s.rng.Shuffle(len(s.cards), func(i, j int) { s.cards[i], s.cards[j] = s.cards[j], s.cards[i] })
 	s.placeCutCard(penetration)
+	s.reshuffle = false
 }
