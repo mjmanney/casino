@@ -17,7 +17,6 @@ type Player struct {
 	LocalWallet  int // Bankroll for each game session
 	GlobalWallet int // Wallet that persists across game sessions
 	Status       PlayerStatus
-	ActiveHand   HandIndex
 }
 
 type PlayerStatus int
@@ -64,17 +63,17 @@ func (p *Player) AddHand(h *Hand) {
 }
 
 // Check that the Player is elligble for SPLIT
-func (p *Player) CanSplit() (bool, error) {
-	if len(p.Hands) >= MaxHandsPerPlayer {
+func (player *Player) CanSplit(hand *Hand) (bool, error) {
+	if len(player.Hands) >= MaxHandsPerPlayer {
 		return false, fmt.Errorf("cannot split; player has maximum number of hands")
 	}
 
-	if !p.Hands[p.ActiveHand].isFirstAction() {
+	if !hand.isFirstAction() {
 		return false, fmt.Errorf("cannot split; player can only split on first action of hand")
 	}
 
-	c1 := p.Hands[p.ActiveHand].Cards[0].Rank
-	c2 := p.Hands[p.ActiveHand].Cards[1].Rank
+	c1 := hand.Cards[0].Rank
+	c2 := hand.Cards[1].Rank
 
 	if c1 == c2 {
 		return true, nil
@@ -181,10 +180,12 @@ func (h Hand) Value() int { return h.valueCore(false) }
 func (h Hand) ValueAll() int { return h.valueCore(true) }
 
 // Check for players blackjack.
-func (h Hand) checkBlackjack() {
+func (h Hand) checkBlackjack() bool {
 	if h.Value() == 21 && len(h.Cards) == 2 && !h.IsSplit {
 		h.Blackjack()
+		return true
 	}
+	return false
 }
 
 // Check that the hand is elligble for actions such as Double or Split.

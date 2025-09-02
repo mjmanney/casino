@@ -7,12 +7,12 @@ import (
 
 // Action is the interface every game command implements.
 type Action interface {
-	Execute(g *Game, p *Player) (endTurn bool, err error)
+	Execute(g *Game, p *Player, h *Hand) (endTurn bool, err error)
 }
 
-func (g *Game) ApplyAction(playerID string, a Action) (bool, error) {
+func (g *Game) ApplyAction(pID string, action Action, h *Hand) (bool, error) {
 	var p *Player
-	switch playerID {
+	switch pID {
 	case g.Seat1.ID:
 		p = g.Seat1
 	case g.Seat2.ID:
@@ -21,9 +21,9 @@ func (g *Game) ApplyAction(playerID string, a Action) (bool, error) {
 		p = g.Seat3
 	}
 	if p == nil {
-		return false, fmt.Errorf("unknown player %s", playerID)
+		return false, fmt.Errorf("unknown player %s", pID)
 	}
-	return a.Execute(g, p)
+	return action.Execute(g, p, h)
 }
 
 //	----- Hit -----
@@ -35,18 +35,17 @@ continue to HIT if the total hand value is <= 21.
 */
 type Hit struct{}
 
-func (Hit) Execute(g *Game, p *Player) (bool, error) {
+func (Hit) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	if g.State != StatePlayerTurn {
 		return false, fmt.Errorf("cannot hit while in %s", g.State)
 	}
 
-	hand := p.Hands[p.ActiveHand]
-	if hand.Status == Busted {
+	if h.Status == Busted {
 		return false, fmt.Errorf("hit not applicable; player busted")
 	}
 
 	card := g.Dealer.Shoe.Draw()
-	hand.Cards = append(hand.Cards, card)
+	h.Cards = append(h.Cards, card)
 
 	e := store.Event{
 		Type: "Hit",
@@ -56,10 +55,10 @@ func (Hit) Execute(g *Game, p *Player) (bool, error) {
 		},
 	}
 	g.Store.Append(e)
-	if hand.Value() > 21 {
-		hand.Bust()
+	if h.Value() > 21 {
+		h.Bust()
 		return true, nil
-	} else if hand.Value() == 21 {
+	} else if h.Value() == 21 {
 		return true, nil
 	}
 	return false, nil
@@ -70,14 +69,12 @@ func (Hit) Execute(g *Game, p *Player) (bool, error) {
 // Player may STAND to end the turn with a qualifying hand.
 type Stand struct{}
 
-func (Stand) Execute(g *Game, p *Player) (bool, error) {
+func (Stand) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	if g.State != StatePlayerTurn {
 		return false, fmt.Errorf("cannot stand while in %s", g.State)
 	}
 
-	hand := p.Hands[p.ActiveHand]
-
-	if hand.Status == Busted {
+	if h.Status == Busted {
 		return false, fmt.Errorf("stand not applicable; player busted")
 	}
 
@@ -85,7 +82,7 @@ func (Stand) Execute(g *Game, p *Player) (bool, error) {
 		Type: "Stand",
 		Payload: map[string]any{
 			"PlayerID": p.ID,
-			"Hand":     hand.Cards,
+			"Hand":     h.Cards,
 		},
 	}
 	g.Store.Append(e)
@@ -101,21 +98,19 @@ of a turn.
 */
 type Double struct{}
 
-func (Double) Execute(g *Game, p *Player) (bool, error) {
+func (Double) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	if g.State != StatePlayerTurn {
 		return false, fmt.Errorf("cannot double while in %s", g.State)
 	}
 
-	hand := p.Hands[p.ActiveHand]
-
-	if !hand.isFirstAction() {
+	if !h.isFirstAction() {
 		return false, fmt.Errorf("can only double on first action")
 	}
 
-	doubleBetAmount := hand.Bet
-	p.Wager(doubleBetAmount)
+	p.Wager(h.Bet)
+	h.Bet += h.Bet
 	card := g.Dealer.Shoe.Draw()
-	hand.Cards = append(hand.Cards, card)
+	h.Cards = append(h.Cards, card)
 
 	e := store.Event{
 		Type: "Double",
@@ -139,31 +134,29 @@ Doubles allowed after splitting.
 */
 type Split struct{}
 
-func (Split) Execute(g *Game, p *Player) (bool, error) {
+func (Split) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	if g.State != StatePlayerTurn {
 		return false, fmt.Errorf("cannot split while in %s", g.State)
 	}
 
-	canSplit, err := p.CanSplit()
+	canSplit, err := p.CanSplit(h)
 	if !canSplit {
 		return false, err
 	}
 
-	// Ok to split
-	hand := p.Hands[p.ActiveHand]
-	splitBetAmount := hand.Bet
-	c1 := hand.Cards[0]
-	c2 := hand.Cards[1]
+	splitBetAmount := h.Bet
+	c1 := h.Cards[0]
+	c2 := h.Cards[1]
 	p.Wager(splitBetAmount)
 
 	// Active hand becomes just the first card, in a new Cards slice.
-	hand.Cards = []Card{c1}
-	hand.IsSplit = true
-	hand.DoubleDown = false
-	hand.Status = Qualified
+	h.Cards = []Card{c1}
+	h.IsSplit = true
+	h.DoubleDown = false
+	h.Status = Qualified
 
 	cardForActiveHand := g.Dealer.Shoe.Draw()
-	hand.Cards = append(hand.Cards, cardForActiveHand)
+	h.Cards = append(h.Cards, cardForActiveHand)
 
 	// New hand starts with the second card and a turn is injected into the turn queue.
 	cardForSplitHand := g.Dealer.Shoe.Draw()
@@ -184,7 +177,7 @@ func (Split) Execute(g *Game, p *Player) (bool, error) {
 		Type: "Split",
 		Payload: map[string]any{
 			"PlayerID":   p.ID,
-			"ActiveHand": fmt.Sprintf("%v", hand.Cards),
+			"ActiveHand": fmt.Sprintf("%v", h.Cards),
 			"SplitHand":  fmt.Sprintf("%v", splitHand.Cards),
 		},
 	})
@@ -203,16 +196,15 @@ Offered after all cards are dealt and before the first player action.
 */
 type Insurance struct{}
 
-func (Insurance) Execute(g *Game, p *Player) (bool, error) {
+func (Insurance) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	if g.State != StateInsuranceTurn {
 		return false, fmt.Errorf("cannot accept insurance while in %s", g.State)
 	}
 
-	hand := p.Hands[p.ActiveHand]
-	insuranceBetAmount := hand.Bet / 2
+	insuranceBetAmount := h.Bet / 2
 	p.Wager(insuranceBetAmount)
 	insuranceBet := NewSideBet(InsuranceBet, insuranceBetAmount)
-	hand.SideBets = append(hand.SideBets, insuranceBet)
+	h.SideBets = append(h.SideBets, insuranceBet)
 
 	e := store.Event{
 		Type: "Insurance",
@@ -235,7 +227,7 @@ Available only on the first action of a turn.
 */
 type Surrender struct{}
 
-func (Surrender) Execute(g *Game, p *Player) (bool, error) {
+func (Surrender) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	if g.State != StatePlayerTurn {
 		return false, fmt.Errorf("cannot surrender while in %s", g.State)
 	}

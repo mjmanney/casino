@@ -43,7 +43,8 @@ func PrintCard(card Card) {
 	}
 }
 
-func PrintHand(hand Hand) {
+// Prints the hand value and status to STDOUT.
+func PrintHand(hand *Hand) {
 	c := hand.Cards
 	for _, card := range c {
 		PrintCard(card)
@@ -68,14 +69,16 @@ func PrintDeck(deck *Deck) {
 	}
 }
 
-func PrintPlayerHand(p *Player) {
-	fmt.Printf("%s's Hand: ", p.Name)
-	PrintHand(*p.Hands[p.ActiveHand])
+// Wrapper on PrintHand that includes player information.
+func PrintPlayerHand(player *Player, hand *Hand) {
+	fmt.Printf("%s's Hand: ", player.Name)
+	PrintHand(hand)
 	fmt.Println("")
 }
 
-func PrintDealerHand(g *Game) {
+// Wrapper on PrintHand that includes dealer information.
+func PrintDealerHand(game *Game) {
 	fmt.Print("Dealer Hand: ")
-	PrintHand(*g.Dealer.Hand)
+	PrintHand(game.Dealer.Hand)
 	fmt.Println("")
 }

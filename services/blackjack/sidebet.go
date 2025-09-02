@@ -1,6 +1,7 @@
 package main
 
-// Holds player side bets, including insurance
+// Holds player side bets, including insurance.
+// All side bets are stored with the initial hand.
 type SideBet struct {
 	Type   SideBetType
 	Amount int

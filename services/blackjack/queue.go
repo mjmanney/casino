@@ -16,17 +16,15 @@ func NewTurn(p *Player, h *Hand) *Turn {
 	}
 }
 
-/*
-------- Turn Queue Processors ------
-*/
+// ------- Enqueue ------
 
-// Add a turn to the end of TurnQueue
+// Appends a turn to the end of the queue.
 func (g *Game) Enqueue(t Turn) {
 	g.TurnQueue = append(g.TurnQueue, t)
 	e := store.Event{
 		Type: "Enqueue",
 		Payload: map[string]any{
-			"Message":   "Added turn to end of queue.",
+			"Message":   "Added turn to end of queue",
 			"Turn":      t,
 			"QueueSize": len(g.TurnQueue),
 			"GameState": g.State,
@@ -35,8 +33,9 @@ func (g *Game) Enqueue(t Turn) {
 	g.Store.Append(e)
 }
 
-// Next removes and returns the current turn.
-// Returns false if the queue is empty.
+// ------- Next ------
+
+// Removes and returns the first item from the queue.
 func (g *Game) Next() (Turn, bool) {
 	if len(g.TurnQueue) == 0 {
 		return Turn{}, false
@@ -49,7 +48,7 @@ func (g *Game) Next() (Turn, bool) {
 	g.Store.Append(store.Event{
 		Type: "Next",
 		Payload: map[string]any{
-			"Message":   "Consumed turn.",
+			"Message":   "Consumed turn",
 			"Turn":      t,
 			"QueueSize": len(g.TurnQueue),
 			"GameState": g.State,
@@ -58,8 +57,9 @@ func (g *Game) Next() (Turn, bool) {
 	return t, true
 }
 
-// Peek returns the current turn without advancing.
-// Returns false if queue is empty
+// ------- Peek ------
+
+// Returns the first item from the queue.
 func (g *Game) Peek() (Turn, bool) {
 	if len(g.TurnQueue) == 0 {
 		return Turn{}, false
@@ -67,71 +67,49 @@ func (g *Game) Peek() (Turn, bool) {
 	return g.TurnQueue[0], true
 }
 
-// AdvanceTurn consumes one turn and updates game state accordingly.
-// If the queue becomes empty after consuming, it's the dealer's turn next;
-// otherwise it's still a player's turn.
+// ------- Advance Turn ------
+
+// Wrapper around Next that processes a turn and advances game state.
 func (g *Game) AdvanceTurn() (Turn, bool) {
-	// Pop
 	t, ok := g.Next()
 	if !ok {
 		g.State = StateDealerTurn
 		g.Store.Append(store.Event{
-			Type: "AdvanceTurn",
+			Type: "Next",
 			Payload: map[string]any{
-				"Message":       "Queue empty (no turn to pop)",
-				"QueueSize":     0,
-				"NextTurn":      "<none>",
-				"NextGameState": g.State,
+				"Message":   "Queue empty",
+				"QueueSize": 0,
+				"NextTurn":  "<none>",
+				"GameState": g.State,
 			},
 		})
 		return Turn{}, false
 	}
 
-	// Decide next state based on what's LEFT after popping
 	if len(g.TurnQueue) == 0 {
 		g.State = StateDealerTurn
 	} else {
 		g.State = StatePlayerTurn
 	}
-
-	// Safe "peek" for logging
-	nextID := any("<none>")
-	if len(g.TurnQueue) > 0 && g.TurnQueue[0].Player != nil {
-		nextID = g.TurnQueue[0].Player.ID
-	}
-
-	g.Store.Append(store.Event{
-		Type: "AdvanceTurn",
-		Payload: map[string]any{
-			"Message":       "Consumed turn. Next in queue:",
-			"NextTurn":      nextID,
-			"QueueSize":     len(g.TurnQueue),
-			"NextGameState": g.State,
-		},
-	})
 	return t, true
 }
 
-/*
-LIFO
-Used when players create a new hand from SPLIT
-*/
+// ------- Inject Next ------
+
+// Injects a turn to be proccessed next by the queue.  Used for splits.
 func (g *Game) InjectNext(t Turn) {
-	// If queue is empty, just append.
 	if len(g.TurnQueue) == 0 {
 		g.TurnQueue = append(g.TurnQueue, t)
 	} else {
-		// Optional: sanity check same player as head (split invariant)
-		// if head, _ := g.Peek(); head.Player != next.Player { ... }
-		g.TurnQueue = append(g.TurnQueue, Turn{}) // grow by one
-		copy(g.TurnQueue[2:], g.TurnQueue[1:])    // shift tail right
-		g.TurnQueue[1] = t                        // place after head
+		g.TurnQueue = append(g.TurnQueue, Turn{})
+		copy(g.TurnQueue[2:], g.TurnQueue[1:])
+		g.TurnQueue[1] = t
 	}
 
 	e := store.Event{
 		Type: "InjectNext",
 		Payload: map[string]any{
-			"Message":   "Injected turn.",
+			"Message":   "Turn injected",
 			"Turn":      t,
 			"QueueSize": len(g.TurnQueue),
 			"GameState": g.State,
@@ -140,13 +118,15 @@ func (g *Game) InjectNext(t Turn) {
 	g.Store.Append(e)
 }
 
-// Build the queue at the start of a round: p1 -> p2 -> p3
+// ------- Clear ------
+
+// Removes all turns from the queue.
 func (g *Game) Clear() {
 	g.TurnQueue = g.TurnQueue[:0]
 	e := store.Event{
 		Type: "Clear",
 		Payload: map[string]any{
-			"Message":   "Emptied the TurnQueue.",
+			"Message":   "Cleared queue",
 			"QueueSize": len(g.TurnQueue),
 			"GameState": g.State,
 		},
