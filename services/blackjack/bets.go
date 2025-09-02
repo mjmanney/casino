@@ -41,8 +41,9 @@ func (g *Game) PlaceBets() {
 		e := store.Event{
 			Type: string(g.State),
 			Payload: map[string]any{
-				"Player": p.Name,
-				"Wager":  betAmount,
+				"Player":  p.Name,
+				"Wager":   betAmount,
+				"RoundID": g.RoundId,
 			},
 		}
 		g.Store.Append(e)
@@ -82,6 +83,7 @@ func (g *Game) Settle() {
 					"BetType":     InsuranceBet,
 					"Result":      Win,
 					"PlayerID":    p.ID,
+					"RoundID":     g.RoundId,
 					"WagerAmount": insuranceSideBet.Amount,
 					"LocalWallet": p.LocalWallet,
 				},
@@ -93,6 +95,7 @@ func (g *Game) Settle() {
 					"BetType":     InsuranceBet,
 					"Result":      Loss,
 					"PlayerID":    p.ID,
+					"RoundID":     g.RoundId,
 					"WagerAmount": insuranceSideBet.Amount,
 					"LocalWallet": p.LocalWallet,
 				},
@@ -131,6 +134,7 @@ func (g *Game) Settle() {
 					"BetType":     "Standard",
 					"Result":      outcome,
 					"PlayerID":    p.ID,
+					"RoundID":     g.RoundId,
 					"WagerAmount": wager,
 					"LocalWallet": p.LocalWallet,
 				},

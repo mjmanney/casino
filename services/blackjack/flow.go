@@ -5,6 +5,7 @@ import (
 )
 
 func (g *Game) StartRound() {
+	g.RoundId += 1
 	g.Clear()
 	g.Dealer.ClearHand()
 	g.DoForEachPlayer(func(p *Player) {
@@ -84,6 +85,9 @@ func (g *Game) DealerTurn() {
 			card := g.Dealer.Shoe.Draw()
 			g.Dealer.Hand.Cards = append(g.Dealer.Hand.Cards, card)
 			g.Store.Append(store.Event{Type: "DealerHit", Payload: card})
+			if g.Dealer.Hand.Value() > 21 {
+				g.Dealer.Hand.Bust()
+			}
 			PrintDealerHand(g)
 		}
 	}

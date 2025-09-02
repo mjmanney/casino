@@ -24,7 +24,11 @@ func (d *Dealer) RevealHoleCard() {
 }
 
 func (d *Dealer) ClearHand() {
-	d.Hand = NewHand(0, SplitConfig{})
+	if d.Hand == nil {
+		d.Hand = &Hand{}
+	}
+	d.Hand.Cards = d.Hand.Cards[:0]
+	d.Hand.Status = Qualified
 }
 
 // Dealer checks for insurance and blackjack.

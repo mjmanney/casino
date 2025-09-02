@@ -41,8 +41,11 @@ func NewPlayer(id string, name string) *Player {
 func (p *Player) Active() { p.Status = Active }
 func (p *Player) Idle()   { p.Status = Idle }
 func (p *Player) ClearHands() {
-	p.Hands = make([]*Hand, 0, MaxHandsPerPlayer)
-	p.AddHand(NewHand(0, SplitConfig{}))
+	for _, h := range p.Hands {
+		h.Cards = nil
+		h.SideBets = nil
+	}
+	p.Hands = p.Hands[:0]
 	p.TotalBet = 0
 }
 

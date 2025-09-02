@@ -20,6 +20,7 @@ type Game struct {
 	TurnQueue           []Turn
 	Store               *store.EventStore
 	Config              *GameConfig
+	RoundId             int
 }
 
 type GameConfig struct {
@@ -51,5 +52,6 @@ func NewGame(store *store.EventStore) *Game {
 			InsurancePayout: 2.0,
 			BlackjackPayout: 1.5,
 		},
+		RoundId: 0,
 	}
 }
