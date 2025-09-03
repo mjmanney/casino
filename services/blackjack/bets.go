@@ -21,7 +21,7 @@ func (g *Game) PlaceBets() {
 		return
 	}
 	scanner := bufio.NewScanner(os.Stdin)
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		fmt.Printf("\n%s, Place a wager: ", p.Name)
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
@@ -64,7 +64,7 @@ func (g *Game) Settle() {
 	dScore := g.Dealer.Hand.Value()
 
 	// Settle Insurance Bets
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		h := p.Hands[0]
 		if len(h.SideBets) == 0 {
 			return
@@ -104,7 +104,7 @@ func (g *Game) Settle() {
 	})
 
 	// Settle Main Bets
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		for i := range p.Hands {
 			h := p.Hands[i]
 			wager := h.Bet
@@ -154,7 +154,7 @@ func (g *Game) OfferInsurance() {
 	fmt.Println("Insurance open.")
 
 	scanner := bufio.NewScanner(os.Stdin)
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		fmt.Printf("\n%s, Insurance? (y/n): ", p.Name)
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {

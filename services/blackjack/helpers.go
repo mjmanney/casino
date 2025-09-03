@@ -1,19 +1,5 @@
 package blackjack
 
-// Executes a callback function for each player at the table.
-func (g *Game) DoForEachPlayer(fn func(*Player)) {
-	for _, p := range g.GetSeats() {
-		if p != nil {
-			fn(p)
-		}
-	}
-}
-
-// Returns the seats in dealing order, including nils.
-func (g *Game) GetSeats() []*Player {
-	return []*Player{g.Seat1, g.Seat2, g.Seat3}
-}
-
 // Returns the of most recent unpaid side bet of a given type, otherwise returns nil.
 func latestUnpaidSideBet(bets []*SideBet, t SideBetType) *SideBet {
 	for i := len(bets) - 1; i >= 0; i-- {
@@ -30,7 +16,7 @@ func latestUnpaidSideBet(bets []*SideBet, t SideBetType) *SideBet {
 
 // Returns true if all players have busted.
 func (g *Game) AllPlayersBusted() bool {
-	for _, p := range g.GetSeats() {
+	for _, p := range g.Seats() {
 		if p == nil {
 			continue
 		}

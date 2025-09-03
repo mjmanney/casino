@@ -32,8 +32,8 @@ func NewPlayer(id string, name string) *Player {
 		Name:         name,
 		Hands:        make([]*Hand, 0, MaxHandsPerPlayer),
 		TotalBet:     0,
-		LocalWallet:  10000,
-		GlobalWallet: 990000,
+		LocalWallet:  0,
+		GlobalWallet: 500000,
 		Status:       Active,
 	}
 }
@@ -52,12 +52,18 @@ func (p *Player) ClearHands() {
 // Wager checks to ensure the Player has the funds to make a bet
 // and updates the players total bet and local wallet.  Ensure
 // to update the Hand's bet property elsewhere.
-func (p *Player) Wager(bet int) {
+func (p *Player) Wager(bet int, min int, max int) error {
 	if bet > p.LocalWallet {
-		fmt.Print("not enough funds in local wallet")
+		return fmt.Errorf("not enough funds in local wallet")
 	}
+
+	if bet < min || bet > max {
+		return fmt.Errorf("bet must be between %d and %d", min, max)
+	}
+
 	p.TotalBet += bet
 	p.LocalWallet -= bet
+	return nil
 }
 
 // Add hand to the players collection.
@@ -187,7 +193,7 @@ func (h Hand) Value() int { return h.valueCore(false) }
 func (h Hand) ValueAll() int { return h.valueCore(true) }
 
 // Check for players blackjack.
-func (h *Hand) checkBlackjack() bool {
+func (h Hand) checkBlackjack() bool {
 	if h.Value() == 21 && len(h.Cards) == 2 && !h.IsSplit {
 		h.Blackjack()
 		return true

@@ -8,7 +8,7 @@ func (g *Game) StartRound() {
 	g.RoundId += 1
 	g.Clear()
 	g.Dealer.ClearHand()
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		p.ClearHands()
 	})
 	g.State = StateBetsOpen
@@ -33,13 +33,13 @@ func (g *Game) DealCards() {
 	}
 	g.Store.Append(e)
 
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		h := NewHand(p.TotalBet, SplitConfig{})
 		p.AddHand(h)
 	})
 
 	for pass := range 2 {
-		g.DoForEachPlayer(func(p *Player) {
+		g.ForEachPlayer(func(p *Player) {
 			card := g.Dealer.Shoe.Draw()
 			p.Hands[0].Cards = append(p.Hands[0].Cards, card)
 		})
@@ -51,7 +51,7 @@ func (g *Game) DealCards() {
 			g.Dealer.Hand.Cards = append(g.Dealer.Hand.Cards, card)
 		}
 	}
-	g.DoForEachPlayer(func(p *Player) {
+	g.ForEachPlayer(func(p *Player) {
 		if p.Hands[0].checkBlackjack() {
 			PrintPlayerHand(p, p.Hands[0])
 		}

@@ -25,14 +25,13 @@ func main() {
 
 	// 3. Initialize game, players join
 	g := blackjack.NewGame(st)
-	g.Seat1 = p1
-	g.Seat2 = p2
-	g.Seat3 = p3
+	g.Join(p1)
+	g.Join(p2)
+	g.Join(p3)
 
 	// 4. Open table and shuffle cards
 	g.Shuffle()
 
-	// new game loop
 	for {
 		// 6. Players place bets before cards are dealt
 		g.PlaceBets()
@@ -41,7 +40,7 @@ func main() {
 		blackjack.PrintDealerHand(g)
 		// 8. Add initial player turns to queue
 		if g.State == blackjack.StatePlayerTurn {
-			g.DoForEachPlayer(func(p *blackjack.Player) {
+			g.ForEachPlayer(func(p *blackjack.Player) {
 				h := p.Hands[0]
 				blackjack.PrintPlayerHand(p, h)
 				turn := blackjack.NewTurn(p, h)
