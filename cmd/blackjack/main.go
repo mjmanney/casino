@@ -11,8 +11,6 @@ import (
 	"casino/services/blackjack"
 )
 
-// TODO: finish up game loop - hands are cleared correctly, but after the first round
-// something goes wrong with the bets
 func main() {
 
 	// 1. Initialize event store

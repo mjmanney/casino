@@ -28,7 +28,10 @@ func (Split) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	splitBetAmount := h.Bet
 	c1 := h.Cards[0]
 	c2 := h.Cards[1]
-	p.Wager(splitBetAmount)
+	err = p.Wager(splitBetAmount, h.Bet, h.Bet)
+	if err != nil {
+		return false, err
+	}
 
 	// Active hand becomes just the first card, in a new Cards slice.
 	h.Cards = []Card{c1}

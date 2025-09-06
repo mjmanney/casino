@@ -7,7 +7,7 @@ func latestUnpaidSideBet(bets []*SideBet, t SideBetType) *SideBet {
 		if sb == nil {
 			continue
 		}
-		if sb.Type == t && !sb.Paid {
+		if sb.Config.Type == t && !sb.Paid {
 			return sb
 		}
 	}
@@ -27,4 +27,9 @@ func (g *Game) AllPlayersBusted() bool {
 		}
 	}
 	return true
+}
+
+// Gets current game configuration
+func (g *Game) GetConfig() *GameConfig {
+	return g.Config
 }

@@ -22,8 +22,12 @@ func (Insurance) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 	}
 
 	insuranceBetAmount := h.Bet / 2
-	p.Wager(insuranceBetAmount)
-	insuranceBet := NewSideBet(InsuranceBet, insuranceBetAmount)
+	InsuranceSideBetConfig := NewSideBetConfig(InsuranceBet, g.Config)
+	insuranceBet := NewSideBet(InsuranceSideBetConfig, insuranceBetAmount)
+	err := p.Wager(insuranceBet.Amount, insuranceBet.Config.MinWager, InsuranceSideBetConfig.MaxWager)
+	if err != nil {
+		return false, fmt.Errorf("error placing insurance bet")
+	}
 	h.SideBets = append(h.SideBets, insuranceBet)
 
 	e := store.Event{

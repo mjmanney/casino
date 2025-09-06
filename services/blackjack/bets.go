@@ -37,7 +37,10 @@ func (g *Game) PlaceBets() {
 			log.Printf("failed to convert %q to int: %v", cmd, err)
 			return
 		}
-		p.Wager(betAmount)
+		err = p.Wager(betAmount, g.Config.MinWager, g.Config.MaxWager)
+		if err != nil {
+			fmt.Printf("An error occured when placing wager")
+		}
 		e := store.Event{
 			Type: string(g.State),
 			Payload: map[string]any{
@@ -72,35 +75,38 @@ func (g *Game) Settle() {
 
 		insuranceSideBet := latestUnpaidSideBet(h.SideBets, InsuranceBet)
 
-		if g.Dealer.Hand.Status == Blackjack && !insuranceSideBet.Paid {
-			payout := int(math.Round(float64(insuranceSideBet.Amount) * float64(g.Config.InsurancePayout)))
-			payout += insuranceSideBet.Amount
+		if insuranceSideBet != nil {
+			if g.Dealer.Hand.Status == Blackjack && !insuranceSideBet.Paid {
+				payout := int(math.Round(float64(insuranceSideBet.Amount) * float64(g.Config.InsurancePayout)))
+				payout += insuranceSideBet.Amount
+				p.LocalWallet += payout
+				g.Store.Append(store.Event{
+					Type: string(g.State),
+					Payload: map[string]any{
+						"BetType":     InsuranceBet,
+						"Result":      Win,
+						"PlayerID":    p.ID,
+						"RoundID":     g.RoundId,
+						"WagerAmount": insuranceSideBet.Amount,
+						"LocalWallet": p.LocalWallet,
+					},
+				})
+			} else {
+				g.Store.Append(store.Event{
+					Type: string(g.State),
+					Payload: map[string]any{
+						"BetType":     InsuranceBet,
+						"Result":      Loss,
+						"PlayerID":    p.ID,
+						"RoundID":     g.RoundId,
+						"WagerAmount": insuranceSideBet.Amount,
+						"LocalWallet": p.LocalWallet,
+					},
+				})
+			}
 			insuranceSideBet.MarkPaid()
-			p.LocalWallet += payout
-			g.Store.Append(store.Event{
-				Type: string(g.State),
-				Payload: map[string]any{
-					"BetType":     InsuranceBet,
-					"Result":      Win,
-					"PlayerID":    p.ID,
-					"RoundID":     g.RoundId,
-					"WagerAmount": insuranceSideBet.Amount,
-					"LocalWallet": p.LocalWallet,
-				},
-			})
-		} else {
-			g.Store.Append(store.Event{
-				Type: string(g.State),
-				Payload: map[string]any{
-					"BetType":     InsuranceBet,
-					"Result":      Loss,
-					"PlayerID":    p.ID,
-					"RoundID":     g.RoundId,
-					"WagerAmount": insuranceSideBet.Amount,
-					"LocalWallet": p.LocalWallet,
-				},
-			})
 		}
+
 	})
 
 	// Settle Main Bets

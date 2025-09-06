@@ -23,7 +23,10 @@ func (Double) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 		return false, fmt.Errorf("can only double on first action")
 	}
 
-	p.Wager(h.Bet)
+	err := p.Wager(h.Bet, g.Config.MinWager, g.Config.MaxWager)
+	if err != nil {
+		fmt.Print("error placing double wager")
+	}
 	h.DoubleDown = true
 	h.Bet += h.Bet
 	card := g.Dealer.Shoe.Draw()
