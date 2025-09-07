@@ -1,12 +1,14 @@
-go 1.22.2
+go 1.23.0
+
+toolchain go1.24.7
 
 use (
 	.
 	./libs/config
 	./libs/events
 	./libs/fsm
+	./libs/idgen
 	./libs/proto
-	./libs/rand
 	./libs/store
 	./libs/telemetry
 	./services/api

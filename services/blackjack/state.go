@@ -14,6 +14,7 @@ const (
 	StateTableOpen     fsm.State = "TableOpen"
 	StateTableClosed   fsm.State = "TableClosed"
 	StateShuffleCards  fsm.State = "ShuffleCards"
+	StateNewRound      fsm.State = "NewRound"
 	StateDealCards     fsm.State = "DealCards"
 	StateBetsOpen      fsm.State = "BetsOpen"
 	StateBetsClosed    fsm.State = "BetsClosed"

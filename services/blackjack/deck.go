@@ -1,9 +1,13 @@
 package blackjack
 
 import (
+	// Standard
 	"fmt"
 	"math/rand"
 	"time"
+
+	// Internal
+	"casino/libs/idgen"
 )
 
 //	----- Shoe Componenents -----
@@ -38,6 +42,7 @@ type Shoe struct {
 	cutIndex  int
 	rng       *rand.Rand
 	reshuffle bool
+	ShoeID    string
 }
 
 // Creates a new standard 52-card deck.
@@ -83,6 +88,7 @@ func NewShoe(penetration float64, decks ...*Deck) *Shoe {
 		pos:       0,
 		rng:       r,
 		reshuffle: false,
+		ShoeID:    idgen.NewUUID(),
 	}
 	s.placeCutCard(penetration)
 	return s
@@ -117,4 +123,6 @@ func (s *Shoe) Shuffle(penetration float64) {
 	s.rng.Shuffle(len(s.cards), func(i, j int) { s.cards[i], s.cards[j] = s.cards[j], s.cards[i] })
 	s.placeCutCard(penetration)
 	s.reshuffle = false
+	s.ShoeID = idgen.NewUUID()
+
 }

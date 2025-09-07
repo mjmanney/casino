@@ -32,6 +32,8 @@ The project ships with a Makefile to simplify common tasks:
 - `make go-run-all` – run compiled binaries
 - `make go-test` – execute unit tests
 - `make flyway-migrate` / `make flyway-clean` – apply or reset database migrations
+- `make db-health`– verifies postgres connection using cmd/tools/dbhealth
+
 
 ## Blackjack MVP Plan
 
@@ -42,7 +44,25 @@ services:
    games, place bets, and perform actions like hit or stand.
 2. **Game Service** – runs the blackjack engine and state machine. It receives
    commands from the API, validates game rules, and appends resulting events to
-   the `event_log`.
+  the `event_log`.
+
+### Persistent Event Store (CLI Mirroring)
+
+The in-memory event store used by the Blackjack CLI can optionally mirror events to Postgres. This is useful during development to persist the game log without changing gameplay code.
+
+Run the Blackjack CLI with persistence enabled:
+
+```
+go run ./cmd/blackjack -persist -db "$DATABASE_URL" -stream 00000000-0000-0000-0000-000000000001
+```
+
+Flags:
+
+- `-persist`: enable Postgres mirroring
+- `-db`: Postgres connection string (defaults to `DATABASE_URL`)
+- `-stream`: UUID for this table’s stream id
+
+Events are still recorded in-memory; Postgres writes are best-effort and failures are logged without interrupting the game loop.
 
 ### Data Flow
 
@@ -100,6 +120,5 @@ Services are defined in `docker-compose.yml`
 docker compose up -d
 docker compose ps
 ```
-
 
 

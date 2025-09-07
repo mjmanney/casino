@@ -3,6 +3,7 @@ package main
 import (
 	// Standard
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 
@@ -12,9 +13,25 @@ import (
 )
 
 func main() {
+	// CLI flags for go run ./cmd/blackjack
+	dbURL := flag.String("db", os.Getenv("DATABASE_URL"), "Postgres connection string")
+	streamID := flag.String("stream", "00000000-0000-0000-0000-000000000001", "Event stream UUID for this table")
+	flag.Parse()
 
 	// 1. Initialize event store
-	st := store.NewEventStore()
+	db, err := store.OpenPostgres(*dbURL)
+	if err != nil {
+		fmt.Println("database error:", err)
+		os.Exit(1)
+	}
+	pst := store.NewPersistentStore(db)
+	st := store.NewEventStore(*pst, store.EnvelopeDefaults{
+		StreamID:      *streamID,
+		StreamType:    "table",
+		Producer:      "game",
+		SchemaVersion: 1,
+		Metadata:      map[string]any{"app": "blackjack-cli"},
+	})
 
 	// 2. Initialize players
 	p1 := blackjack.NewPlayer("1", "Fedor")

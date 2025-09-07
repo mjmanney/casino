@@ -1,17 +1,34 @@
 package blackjack
 
 import (
+	"casino/libs/idgen"
 	"casino/libs/store"
 )
 
 func (g *Game) StartRound() {
+	g.State = StateNewRound
 	g.RoundId += 1
+
+	cID := idgen.NewUUID()
+	g.CorrelationId = cID
+	g.Store.SetCorrelationID(cID)
+
 	g.Clear()
 	g.Dealer.ClearHand()
 	g.ForEachPlayer(func(p *Player) {
 		p.ClearHands()
+		p.Active()
 	})
+
+    g.Store.Append(store.Event{
+        Type: string(g.State),
+        Payload: map[string]any{
+            "Message":  "hello",
+            "RoundCID": g.CorrelationId,
+        },
+    })
 	g.State = StateBetsOpen
+
 }
 
 //	----- Deal Cards -----
@@ -71,9 +88,9 @@ func (g *Game) DealerTurn() {
 	}
 
 	e := store.Event{
-		Type: "Dealer Play",
+		Type: string(g.State),
 		Payload: map[string]any{
-			"state": g.State,
+			"Message": "Dealer playing...",
 		},
 	}
 	g.Store.Append(e)

@@ -1,9 +1,12 @@
 package blackjack
 
 import (
-	"casino/libs/fsm"
-	"casino/libs/store"
+	// Standard
 	"fmt"
+	// Internal
+	"casino/libs/fsm"
+	"casino/libs/idgen"
+	"casino/libs/store"
 )
 
 //	----- Game State Machine -----
@@ -21,7 +24,9 @@ type Game struct {
 	TurnQueue           []Turn
 	Store               *store.EventStore
 	Config              *GameConfig
-	RoundId             int
+	RoundId             int    // User friendly round ID
+	CorrelationId       string // Round UUID saved to event store
+	StreamId            string // Gam instance UUID
 }
 
 type GameConfig struct {
@@ -35,8 +40,20 @@ type GameConfig struct {
 	SurrenderPayout float64 // 0.5 = 1:2
 }
 
-func NewGame(store *store.EventStore) *Game {
+func NewGame(s *store.EventStore) *Game {
 	d := NewDealer("Dealer")
+	cID := idgen.NewUUID()
+	sID := idgen.NewUUID()
+	s.SetStream(sID, "table", "game")
+	s.SetCorrelationID(cID)
+
+	s.Append(store.Event{
+		Type: string(StateTableOpen),
+		Payload: map[string]any{
+			"Message": "Table Opened",
+		},
+	})
+
 	return &Game{
 		State:     StateTableOpen,
 		Seat1:     nil,
@@ -44,7 +61,7 @@ func NewGame(store *store.EventStore) *Game {
 		Seat3:     nil,
 		Dealer:    d,
 		TurnQueue: []Turn{},
-		Store:     store,
+		Store:     s,
 		Config: &GameConfig{
 			MinBuyIn:        1000,
 			MaxBuyIn:        100000,
@@ -55,7 +72,9 @@ func NewGame(store *store.EventStore) *Game {
 			BlackjackPayout: 1.5,
 			SurrenderPayout: 0.5,
 		},
-		RoundId: 0,
+		RoundId:       1,
+		CorrelationId: cID,
+		StreamId:      sID,
 	}
 }
 

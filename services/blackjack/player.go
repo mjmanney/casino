@@ -193,12 +193,12 @@ func (h Hand) Value() int { return h.valueCore(false) }
 func (h Hand) ValueAll() int { return h.valueCore(true) }
 
 // Check for players blackjack.
-func (h Hand) checkBlackjack() bool {
-	if h.Value() == 21 && len(h.Cards) == 2 && !h.IsSplit {
-		h.Blackjack()
-		return true
-	}
-	return false
+func (h *Hand) checkBlackjack() bool {
+    if h.Value() == 21 && len(h.Cards) == 2 && !h.IsSplit {
+        h.Blackjack()
+        return true
+    }
+    return false
 }
 
 // Check that the hand is elligble for actions such as Double or Split.

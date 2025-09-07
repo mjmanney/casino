@@ -35,11 +35,15 @@ func (g *Game) PlaceBets() {
 		betAmount, err := strconv.Atoi(cmd)
 		if err != nil {
 			log.Printf("failed to convert %q to int: %v", cmd, err)
+			// Set player status to Idle
+			p.Idle()
 			return
 		}
 		err = p.Wager(betAmount, g.Config.MinWager, g.Config.MaxWager)
 		if err != nil {
-			fmt.Printf("An error occured when placing wager")
+			fmt.Printf("an error occured when placing wager: %v", err.Error())
+			// Set player status to Idle
+			p.Idle()
 		}
 		e := store.Event{
 			Type: string(g.State),
