@@ -20,13 +20,13 @@ func (g *Game) StartRound() {
 		p.Active()
 	})
 
-    g.Store.Append(store.Event{
-        Type: string(g.State),
-        Payload: map[string]any{
-            "Message":  "hello",
-            "RoundCID": g.CorrelationId,
-        },
-    })
+	g.Store.Append(store.Event{
+		Type: string(g.State),
+		Payload: map[string]any{
+			"Message":  "hello",
+			"RoundCID": g.CorrelationId,
+		},
+	})
 	g.State = StateBetsOpen
 
 }
@@ -87,13 +87,12 @@ func (g *Game) DealerTurn() {
 		return
 	}
 
-	e := store.Event{
+	g.Store.Append(store.Event{
 		Type: string(g.State),
 		Payload: map[string]any{
 			"Message": "Dealer playing...",
 		},
-	}
-	g.Store.Append(e)
+	})
 
 	g.Dealer.RevealHoleCard()
 	PrintDealerHand(g)
@@ -101,7 +100,12 @@ func (g *Game) DealerTurn() {
 		for g.Dealer.Hand.Value() < 17 {
 			card := g.Dealer.Shoe.Draw()
 			g.Dealer.Hand.Cards = append(g.Dealer.Hand.Cards, card)
-			g.Store.Append(store.Event{Type: "DealerHit", Payload: card})
+			g.Store.Append(store.Event{
+				Type: "Hit",
+				Payload: map[string]any{
+					"card": card.String(),
+				},
+			})
 			if g.Dealer.Hand.Value() > 21 {
 				g.Dealer.Hand.Bust()
 			}

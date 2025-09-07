@@ -24,14 +24,14 @@ func main() {
 		fmt.Println("database error:", err)
 		os.Exit(1)
 	}
-	pst := store.NewPersistentStore(db)
-	st := store.NewEventStore(*pst, store.EnvelopeDefaults{
-		StreamID:      *streamID,
-		StreamType:    "table",
-		Producer:      "game",
-		SchemaVersion: 1,
-		Metadata:      map[string]any{"app": "blackjack-cli"},
-	})
+    pst := store.NewPersistentStore(db)
+    st := store.NewEventStore(pst, store.EnvelopeDefaults{
+        StreamID:      *streamID,
+        StreamType:    "table",
+        Producer:      "game",
+        SchemaVersion: 1,
+        Metadata:      map[string]any{"app": "blackjack-cli"},
+    })
 
 	// 2. Initialize players
 	p1 := blackjack.NewPlayer("1", "Fedor")

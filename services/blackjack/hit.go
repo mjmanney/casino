@@ -32,7 +32,7 @@ func (Hit) Execute(g *Game, p *Player, h *Hand) (bool, error) {
 		Type: "Hit",
 		Payload: map[string]any{
 			"PlayerID": p.ID,
-			"Card":     card,
+			"Card":     card.String(),
 		},
 	}
 	g.Store.Append(e)

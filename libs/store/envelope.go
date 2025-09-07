@@ -32,7 +32,7 @@ type Loader interface {
 	LoadByStream(streamID string, afterSeq int64, limit int) ([]Envelope, error)
 }
 
-// PostgresStore is a convenience interface combining append and load.
+// PersistentStore is a convenience interface combining append and load.
 type PersistentStore interface {
 	Appender
 	Loader

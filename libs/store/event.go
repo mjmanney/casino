@@ -9,17 +9,17 @@ import (
 type Event struct {
 	Type     string
 	Envelope Envelope
-	Payload  any
+	Payload  map[string]any
 }
 
 // EventStore provides access to both in-memory and persistant store of events.
 type EventStore struct {
 	events     []Event
-	persistent PostgresStore
+	persistent PersistentStore
 	defaults   EnvelopeDefaults
 }
 
-func NewEventStore(p PostgresStore, d EnvelopeDefaults) *EventStore {
+func NewEventStore(p PersistentStore, d EnvelopeDefaults) *EventStore {
 	return &EventStore{
 		events:     []Event{},
 		persistent: p,
@@ -67,22 +67,22 @@ type EnvelopeDefaults struct {
 }
 
 func asMap(v any) map[string]any {
-    if v == nil {
-        return map[string]any{}
-    }
-    if m, ok := v.(map[string]any); ok {
-        return m
-    }
-    // Gracefully handle map[string]string by widening values to any
-    if ms, ok := v.(map[string]string); ok {
-        out := make(map[string]any, len(ms))
-        for k, val := range ms {
-            out[k] = val
-        }
-        return out
-    }
-    // Fallback: wrap as a value field. Note: ensure nested maps use string keys.
-    return map[string]any{"value": v}
+	if v == nil {
+		return map[string]any{}
+	}
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
+	// Gracefully handle map[string]string by widening values to any
+	if ms, ok := v.(map[string]string); ok {
+		out := make(map[string]any, len(ms))
+		for k, val := range ms {
+			out[k] = val
+		}
+		return out
+	}
+	// Fallback: wrap as a value field. Note: ensure nested maps use string keys.
+	return map[string]any{"value": v}
 }
 
 func (s *EventStore) SetStream(streamID, streamType, producer string) {
